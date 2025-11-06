@@ -1,0 +1,9 @@
+# Default initial positions for arm's ros2_control fake system
+
+initial_positions:
+  finger_joint1: 0.0
+  joint1: 0.0
+  joint2: 0.0
+  joint3: 0.0
+  joint4: 0.0
+  joint5: 0.0

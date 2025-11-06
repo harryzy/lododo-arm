@@ -1,0 +1,73 @@
+# Dual-view triangulation configuration parameters
+# ROS2 parameter file format
+# Used for TriangulationNode, ProjectionNode, ArmCommandInterface
+
+# TriangulationNode parameters
+triangulation_node:
+  ros__parameters:
+    # Camera intrinsics (automatically read from camera_info, here as backup)
+    camera_fx: 1128.1
+    camera_fy: 1128.1
+    camera_cx: 320.0
+    camera_cy: 240.0
+    
+    # Triangulation parameters
+    # Note: Since using joint1 rotation for dual-view, baseline now represents rotation angle
+    # baseline=0.20 → joint1 rotates 20 degrees (converted via baseline*100)
+    baseline: 0.15              # Dual-view parameter: 0.15 = 15 degrees joint1 rotation
+    camera_radius: 0.33         # Distance from camera to joint1 rotation axis (meters), physical measurement
+    depth_calibration_factor: 0.584  # Depth calibration factor (actual depth/calculated depth), calibrated based on 39cm measured value
+    min_disparity: 3.0         # Minimum disparity (pixels)
+    max_depth: 2.0              # Maximum measurement depth (meters)
+    min_depth: 0.10             # Minimum measurement depth (meters)
+    iou_threshold: 0.15          # Object matching IoU threshold
+    pixel_uncertainty: 1.0      # Pixel uncertainty
+    
+    # Matching threshold when classes differ
+    class_mismatch_score_threshold: 0.20  # Minimum matching score when classes differ (default 0.5 too high)
+    same_class_score_threshold: 0.40      # Minimum matching score when classes are same
+    
+    # Thickness estimation parameters (for reverse-calculating 3D size from oblique view)
+    # Formula: thickness = width × thickness_ratio
+    # Different object classes can have different ratios
+    thickness_ratio_default: 1.0  # Default thickness ratio (generic objects)
+    
+    # Object class-specific thickness ratios (COCO dataset class IDs)
+    # Parameter naming format: thickness_ratio_class_{class_id}
+    thickness_ratio_class_39: 0.3   # bottle (beverage bottle): elongated
+    thickness_ratio_class_40: 0.4   # wine glass: elongated
+    thickness_ratio_class_41: 0.5   # cup: medium
+    thickness_ratio_class_45: 0.6   # bowl: thicker
+    thickness_ratio_class_56: 0.2   # chair: thin
+    thickness_ratio_class_60: 0.1   # dining table: very thin
+    thickness_ratio_class_63: 0.15  # laptop: thin
+    thickness_ratio_class_64: 0.6   # mouse: thicker
+    thickness_ratio_class_66: 0.25  # keyboard: thin
+    thickness_ratio_class_73: 0.08  # book: very thin
+    thickness_ratio_class_75: 0.4   # vase: medium
+    # Note: Upright elongated objects like toothbrush (79) will automatically use upright object algorithm (aspect_ratio>2.5)
+
+    # Node switches
+    enable_triangulation: true  # Enabled by default
+    
+    # 🎲 Cube detection mode
+    detect_cube_only: false     # Whether to detect only cubes (true=only grasp cubes)
+    cube_aspect_ratio_tolerance: 0.3   # bbox aspect ratio tolerance
+    cube_dimension_tolerance: 0.25     # 3D dimension tolerance
+    cube_min_edge_length: 0.03  # Cube minimum edge length (meters) = 3cm
+    cube_max_edge_length: 0.08  # Cube maximum edge length (meters) = 8cm
+    cube_max_x_position: 0.5    # Cube maximum X coordinate (meters) - exceeds arm working range
+    
+    # Position correction parameters (compensate URDF vs actual installation deviation)
+    # Measured: X should be 30-33cm, URDF(25°+1.5cm high) calculates 28.2cm, needs +2cm compensation
+    # Z should be 0-3cm, URDF calculates 4.1cm, within acceptable range
+    # Z compensation: RViz shows 0.03 but JSON outputs -0.025, diff 5.5cm, needs +0.055m compensation
+    position_correction_x: 0.02  # X coordinate compensation +2cm (correction factor method deprecated)
+    position_correction_y: 0.11   # Y coordinate compensation
+    position_correction_z: 0.05   # Z coordinate compensation (to be adjusted)
+
+# ArmCommandInterface parameters (unified configuration)
+arm_command_interface:
+  ros__parameters:
+    baseline: 0.15              # Dual-view parameter (consistent with above)
+    dual_view_timeout: 10.0     # Detection timeout for each view (seconds)

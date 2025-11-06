@@ -1,0 +1,40 @@
+# ROS2 build artifacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# YOLO models (large files)
+*.pt
+*.pth
+*.onnx
+
+# Vosk models (large files)
+vosk_model/
+vosk-model-*/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak

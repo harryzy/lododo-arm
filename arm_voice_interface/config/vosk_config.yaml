@@ -1,0 +1,27 @@
+# Vosk STT configuration for arm_voice_insterface
+# model_type: choose a label to identify language/model family (e.g., 'cn', 'en')
+model_type: 'cn'
+# Absolute path to the Vosk model directory (override with environment VOSK_MODEL_PATH if set)
+model_path_cn: '~/lododo-arm/src/arm_voice_interface/vosk_model/vosk-model-small-cn-0.22'
+model_path_en: '~/lododo-arm/src/arm_voice_interface/vosk_model/vosk-model-small-en-us-0.15'
+
+# Voice command mappings for robotic arm control
+# These keywords are recognized by the voice recognition system and mapped to corresponding arm actions
+
+# Chinese voice commands (中文语音命令)
+scan_front_cn: '扫描前面'      # Voice command to scan the front area
+scan_all_cn: '扫描'            # Voice command to perform a full scan
+scan_and_grasp_cn: '抓取'   # Voice command to scan and grasp objects
+grasp_lift_cn: '抓起'
+deliver_pose_cn: '递送'
+
+# English voice commands
+scan_front_en: 'scan front'     # Voice command to scan the front area
+scan_all_en: 'scan all'         # Voice command to perform a full scan
+scan_and_grasp_en: 'scan and grasp'  # Voice command to scan and grasp objects
+grasp_lift_en: 'grasp lift'    
+deliver_pose_en: 'deliver'
+
+# device_index: Index of the audio input device to use (integer, typically 0 for default device; use system tool to list devices)
+device_index: 2
+

@@ -1,0 +1,25 @@
+table:
+  height: 0.00          # Tabletop plane z in base_link coordinate system
+  frame: base_link       # Tabletop reference coordinate system
+objects:
+  # Class -> object real size(m) (width/length for depth approximation; height filled with estimation if uncertain)
+  default:
+    width: 0.05
+    height: 0.05
+  classes:
+    0:                   # YOLO class ID
+      width: 0.05
+      height: 0.05
+    1:
+      width: 0.08
+      height: 0.10
+    64:                  # mouse (mouse)
+      width: 0.10        # Mouse real width 10cm (actual measurement)
+      height: 0.05       # Mouse real height 5cm (actual measurement)
+filter:
+  min_confidence: 0.55
+  cooldown: 2.0          # Same grasp interval (seconds)
+  avg_window: 3          # Position averaging window
+scene:
+  object_id: detected_object
+  publish_box: true

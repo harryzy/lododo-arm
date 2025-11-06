@@ -1,0 +1,17 @@
+# Measure object action with feedback
+
+# Goal
+string target_class      # Target class to measure (empty = measure all)
+int8 view_count          # Number of views (2 or 3)
+---
+# Result
+bool success
+MeasuredObject[] objects
+float32 total_time
+string message
+---
+# Feedback
+string current_view      # "front", "left", "right", "triangulating"
+float32 progress         # 0.0 - 1.0
+int8 objects_found       # Number of objects detected so far
+string status_message    # Human-readable status

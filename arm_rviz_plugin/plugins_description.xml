@@ -1,0 +1,9 @@
+<library path="arm_rviz_plugin">
+  <class name="arm_rviz_plugin/ArmControlPanel" 
+         type="arm_rviz_plugin::ArmControlPanel" 
+         base_class_type="rviz_common::Panel">
+    <description>
+      Arm Control Panel - Send scan and grasp commands with voice control support
+    </description>
+  </class>
+</library>

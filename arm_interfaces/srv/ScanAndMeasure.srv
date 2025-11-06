@@ -1,0 +1,11 @@
+# Scan and measure objects using multi-view triangulation
+
+# Request
+string mode              # "auto" or "target"
+string target_class      # Target class name (required if mode="target")
+int8 view_count          # Number of views (2 or 3), default 2
+---
+# Response
+bool success
+MeasuredObject[] objects
+string message

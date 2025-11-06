@@ -1,0 +1,926 @@
+#!/usr/bin/env python3
+#!/usr/bin/env python3
+import json
+import time
+from threading import Thread
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+from .yolo_detection_node import YoloDetectionNode
+from geometry_msgs.msg import Pose, Point, Quaternion
+
+
+class ArmCommandInterface(Node):
+    """Listen to command topic, call YoloDetectionNode to execute related actions and publish results."""
+
+    def __init__(self):
+        super().__init__("arm_command_interface")
+        self.command_sub = self.create_subscription(String, "/arm_command", self.cb_command, 10)
+        self.result_pub = self.create_publisher(String, "/arm_command_result", 10)
+
+        # Declare and read parameters (consistent with measurement_params.yaml)
+        self.declare_parameter("baseline", 0.10)
+        self.declare_parameter("dual_view_timeout", 10.0)
+        
+        self.baseline = self.get_parameter("baseline").value
+        self.dual_view_timeout = self.get_parameter("dual_view_timeout").value
+        
+        self.get_logger().info(
+            f"📊 Parameters loaded: baseline={self.baseline}, "
+            f"timeout={self.dual_view_timeout}s"
+        )
+
+        # Internally use a YoloDetectionNode instance to execute scan/grasp
+        self.get_logger().info("Starting internal YoloDetectionNode instance...")
+        # Note: Don't start independent executor or rclpy.spin for yolo here,
+        # We will create a single executor at process level and add both nodes to avoid multi-thread spin conflicts.
+        # Use fast planning mode to be consistent with simulation
+        self.yolo = YoloDetectionNode(is_fast_robust_plan=True)
+
+    def cb_command(self, msg: String):
+        cmd = msg.data.strip().lower()
+        self.get_logger().info(f"Received command: {cmd}")
+        if cmd == "scan_front":
+            # Use tri-view intelligent scan (improve recognition rate and accuracy)
+            Thread(target=self._do_scan_front_tri_view, daemon=True).start()
+        elif cmd == "scan_all":
+            Thread(target=self._do_scan_all_traditional, daemon=True).start()
+        elif cmd == "scan_and_grasp":
+            # Use tri-view intelligent scan + grasp
+            Thread(target=self._do_scan_and_grasp_tri_view, daemon=True).start()
+        elif cmd == "hand_delivery":
+            # Use tri-view intelligent scan + hand delivery
+            Thread(target=self._do_hand_delivery_tri_view, daemon=True).start()
+        elif cmd == "grasp_lift":
+            # Use tri-view intelligent scan + grasp lift
+            Thread(target=self._do_grasp_lift_tri_view, daemon=True).start()
+        elif cmd == "deliver_pose":
+            # Use tri-view intelligent scan + specified pose delivery
+            #TODO temporary y-axis translation 10cm
+            current_pose = self.yolo.get_end_effector_pose()
+            current_pose.position.y -= 0.10
+            Thread(target=self._do_deliver_pose_tri_view(current_pose), daemon=True).start()
+        else:
+            self.get_logger().warn(f"Unknown command: {cmd}")
+            self._publish_result({"command": cmd, "status": "unknown_command"})
+
+    def _do_grasp_lift_tri_view(self):
+        """Execute grasp lift task (using tri-view intelligent measurement)"""
+        try:
+            self.get_logger().info("🤝 Starting grasp lift task (tri-view mode)...")
+
+            # Step 1: Tri-view intelligent scan to find target object
+            self.get_logger().info("Step 1: Tri-view intelligent scan for target object...")
+            # baseline encoding: 0.15 represents 15 degrees, need to convert to real angle
+            angle_degrees = self.baseline * 100.0
+            results = self.yolo.scan_tri_view(
+                angle_offset=angle_degrees,  # Converted angle (degrees)
+                timeout=self.dual_view_timeout
+            )
+            
+            if not results:
+                self.get_logger().warn("Target object not found, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "scan",
+                    "method": "tri_view_triangulation",
+                    "error": "no_object_found"
+                })
+                return
+            
+            # Select smallest object as target
+            target = self._select_smallest_from_tri_view(results)
+            
+            if not target:
+                self.get_logger().warn("Unable to select target object, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "scan",
+                    "error": "target_selection_failed"
+                })
+                return
+            
+            self.get_logger().info(
+                f"Found target object: {target.get('label')} "
+                f"(conf={target.get('confidence', 0):.2f}, "
+                f"measured={target.get('measured', False)})"
+            )
+            
+            # Extract grasp pose
+            target_pose = self._extract_grasp_pose_from_detection(target)
+            
+            if target_pose is None:
+                self.get_logger().warn("Unable to extract grasp pose, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "scan",
+                    "error": "invalid_grasp_pose"
+                })
+                return
+            
+            # Phase 1 complete: publish scan result
+            self._publish_result({
+                "command": "grasp_lift",
+                "status": "scan_complete",
+                "phase": "scan",
+                "method": "tri_view_triangulation",
+                "object": {
+                    "label": target.get("label"),
+                    "confidence": target.get("confidence"),
+                    "position": target.get("position"),
+                    "dimensions": target.get("dimensions"),
+                    "measured": target.get("measured", False),
+                    "depth_error": target.get("depth_error"),
+                    "size_error": target.get("size_error")
+                },
+                "object_pose": self._pose_to_simple(target_pose),
+                "total_objects": len(results)
+            })
+            
+            # Step 2: Execute grasp and lift
+            self.get_logger().info("Step 2: Grasp object and lift...")
+            grasp_success = self.yolo.grasp_and_lift(target_pose)
+            
+            if not grasp_success:
+                self.get_logger().warn("Grasp failed, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "grasp",
+                    "method": "tri_view_triangulation",
+                    "error": "grasp_failed",
+                    "object": target
+                })
+                return
+            
+            # Phase 2 complete: publish grasp success result
+            self.get_logger().info("✅ Grasp and lift successful!")
+            self._publish_result({
+                "command": "grasp_lift",
+                "status": "success",
+                "phase": "grasp_complete",
+                "method": "tri_view_triangulation",
+                "object": {
+                    "label": target.get("label"),
+                    "position": target.get("position"),
+                    "dimensions": target.get("dimensions")
+                },
+                "object_pose": self._pose_to_simple(target_pose),
+                "grasp_success": True
+            })
+            
+        except Exception as e:
+            self.get_logger().error(f"Grasp lift task exception: {e}")
+            self._publish_result({
+                "command": "grasp_lift",
+                "status": "error",
+                "phase": "unknown",
+                "error": str(e)
+            })
+    def _do_deliver_pose_tri_view(self, target_pose):
+        """Execute release task"""
+        try:
+            self.get_logger().info("🤝 Starting release task...")
+
+            if target_pose is None:
+                self.get_logger().warn("Target pose not detected, task terminated")
+                self._publish_result({
+                    "command": "deliver_pose",
+                    "status": "error",
+                    "phase": "delivery",
+                    "error": "no_target_pose_detected"
+                })
+                # Try to return to home position
+                try:
+                    self.yolo.go_to_home_position()
+                except Exception:
+                    pass
+                return
+
+            # Move above target pose and release
+            self.get_logger().info("Moving above target pose and releasing object...")
+            delivery_success = self.yolo.deliver_to_hand(target_pose)
+            
+            if delivery_success:
+                self.get_logger().info("✅ Delivery task complete!")
+                self._publish_result({
+                    "command": "deliver_pose",
+                    "status": "success",
+                    "phase": "delivery_complete",
+                    "delivery_pose": self._pose_to_simple(target_pose),
+                    "grasp_success": True  # Add success flag
+                })
+            else:
+                self.get_logger().warn("Delivery to target pose failed")
+                self._publish_result({
+                    "command": "deliver_pose",
+                    "status": "error",
+                    "phase": "delivery",
+                    "error": "delivery_failed"
+                })
+                
+        except Exception as e:
+            self.get_logger().error(f"Delivery to target pose exception: {e}")
+            self._publish_result({
+                "command": "deliver_pose",
+                "status": "error",
+                "phase": "unknown",
+                "error": str(e)
+            })
+
+    def _publish_result(self, payload: dict):
+        def _sanitize(obj):
+            # Recursively convert ROS Pose/Point/Quaternion and nested structures to plain Python types
+            try:
+                # geometry_msgs Pose
+                if isinstance(obj, Pose):
+                    return {
+                        "position": {
+                            "x": float(obj.position.x),
+                            "y": float(obj.position.y),
+                            "z": float(obj.position.z),
+                        },
+                        "orientation": {
+                            "x": float(obj.orientation.x),
+                            "y": float(obj.orientation.y),
+                            "z": float(obj.orientation.z),
+                            "w": float(obj.orientation.w),
+                        },
+                    }
+                # Point or Quaternion
+                if isinstance(obj, Point):
+                    return {"x": float(obj.x), "y": float(obj.y), "z": float(obj.z)}
+                if isinstance(obj, Quaternion):
+                    return {"x": float(obj.x), "y": float(obj.y), "z": float(obj.z), "w": float(obj.w)}
+            except Exception:
+                pass
+
+            # Duck-typing: handle Pose-like objects that aren't exact classes (e.g. wrapped msgs)
+            try:
+                if hasattr(obj, "position") and hasattr(obj, "orientation"):
+                    p = obj.position
+                    o = obj.orientation
+                    return {
+                        "position": {
+                            "x": float(getattr(p, "x", 0.0)),
+                            "y": float(getattr(p, "y", 0.0)),
+                            "z": float(getattr(p, "z", 0.0)),
+                        },
+                        "orientation": {
+                            "x": float(getattr(o, "x", 0.0)),
+                            "y": float(getattr(o, "y", 0.0)),
+                            "z": float(getattr(o, "z", 0.0)),
+                            "w": float(getattr(o, "w", 1.0)),
+                        },
+                    }
+            except Exception:
+                pass
+
+            # Duck-typing: simple Point-like objects
+            try:
+                if all(hasattr(obj, a) for a in ("x", "y", "z")):
+                    return {"x": float(getattr(obj, "x")), "y": float(getattr(obj, "y")), "z": float(getattr(obj, "z"))}
+            except Exception:
+                pass
+
+            if isinstance(obj, dict):
+                return {k: _sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_sanitize(v) for v in obj]
+            # fallback for basic types
+            try:
+                json.dumps(obj)
+                return obj
+            except Exception:
+                # last resort: convert to str
+                return str(obj)
+
+        try:
+            s = String()
+            clean = _sanitize(payload)
+            s.data = json.dumps(clean)
+            self.result_pub.publish(s)
+            self.get_logger().info(f"Published result: {clean}")
+        except Exception as e:
+            self.get_logger().warn(f"Publish result failed: {e}")
+
+    def _do_scan_front_tri_view(self):
+        """Front view tri-view intelligent scan - Improve recognition rate and accuracy"""
+        try:
+            self.get_logger().info("🔍 Executing front view tri-view intelligent scan...")
+            
+            # Calling tri-view scan
+            results = self.yolo.scan_tri_view(
+                angle_offset=15.0,  # view angle offset
+                timeout=self.dual_view_timeout
+            )
+            
+            if results:
+                # Find smallest target
+                smallest = self._select_smallest_from_tri_view(results)
+                
+                # Add debug info
+                self.get_logger().info(f"📦 scan result: total{len(results)} objects")
+                for i, obj in enumerate(results):
+                    self.get_logger().info(
+                        f"  [{i+1}] {obj.get('label', 'unknown')}: "
+                        f"measured={obj.get('measured', False)}, "
+                        f"has_dimensions={obj.get('dimensions') is not None}"
+                    )
+                
+                self._publish_result({
+                    "command": "scan_tri",
+                    "status": "ok",
+                    "success": True,
+                    "method": "tri_view_triangulation",  # Tri-view identifier
+                    "total_objects": len(results),
+                    "results": results,
+                    "smallest_target": smallest.get("label") if smallest else None
+                })
+            else:
+                self.get_logger().warn("Tri-view scan detected no objects")
+                self._publish_result({
+                    "command": "scan_tri",
+                    "status": "no_detection",
+                    "success": False,
+                    "method": "tri_view_triangulation",
+                    "total_objects": 0,
+                    "results": []
+                })
+                
+        except Exception as e:
+            self.get_logger().error(f"Tri-view scan failed: {e}")
+            self._publish_result({
+                "command": "scan_tri",
+                "status": "error",
+                "success": False,
+                "error": str(e)
+            })
+
+    def _do_scan_all_traditional(self):
+        """Traditional multi-view scan (no dual-view triangulation measurement)"""
+        try:
+            self.get_logger().info("🔄 Executing traditional multi-view scan...")
+            
+            # Using traditional scan_views method
+            results = self.yolo.scan_views(
+                stop_on_detection=False, 
+                front_only=False
+            )
+            
+            # Check if any view successfully detected objects
+            has_detection = any(view.get("success", False) for view in results)
+            
+            # Collect all detected objects
+            all_objects = []
+            for view in results:
+                if view.get("success") and view.get("poses"):
+                    all_objects.extend(view.get("poses", []))
+            
+            self._publish_result({
+                "command": "scan_all",
+                "status": "ok",
+                "success": has_detection,  # Add success field for RVIZ plugin recognition
+                "method": "traditional_multi_view",
+                "total_objects": len(all_objects),
+                "views_scanned": len(results),
+                "results": results,
+                "objects": all_objects  # Object list from all views
+            })
+            
+        except Exception as e:
+            self.get_logger().error(f"Traditional multi-view scan failed: {e}")
+            self._publish_result({
+                "command": "scan_all",
+                "status": "error",
+                "success": False,  # Add success field
+                "error": str(e)
+            })
+
+    def _do_scan_and_grasp_tri_view(self):
+        """Tri-view intelligent scan and grasp - Improve recognition rate and accuracy"""
+        try:
+            self.get_logger().info("🎯 Executing tri-view intelligent scan and grasp...")
+            
+            # Tri-view intelligent scan
+            # baseline encoding: 0.15 represents 15 degrees, need to convert to real angle
+            angle_degrees = self.baseline * 100.0
+            results = self.yolo.scan_tri_view(
+                angle_offset=angle_degrees,  # Converted angle (degrees)
+                timeout=self.dual_view_timeout
+            )
+            
+            if not results:
+                self.get_logger().warn("Tri-view scan detected no objects")
+                self._publish_result({
+                    "command": "scan_and_grasp",
+                    "status": "no_target",
+                    "method": "tri_view_triangulation",
+                    "results": []
+                })
+                return
+            
+            # Selected smallest object
+            target = self._select_smallest_from_tri_view(results)
+            
+            if not target:
+                self._publish_result({
+                    "command": "scan_and_grasp",
+                    "status": "no_target",
+                    "results": results
+                })
+                return
+            
+            # Extract grasp pose
+            grasp_pose = self._extract_grasp_pose_from_detection(target)
+            
+            if grasp_pose is None:
+                self._publish_result({
+                    "command": "scan_and_grasp",
+                    "status": "invalid_pose",
+                    "target": target
+                })
+                return
+            
+            found = {
+                "label": target.get("label"),
+                "position": target.get("position"),
+                "dimensions": target.get("dimensions"),
+                "measured": target.get("measured", False),
+                "depth_error": target.get("depth_error"),
+                "pose": self._pose_to_simple(grasp_pose),
+                "view_pair": target.get("view_pair", "unknown")  # Record used view pair
+            }
+            
+            # Executing grasp
+            try:
+                ok = self.yolo.grasping_for_scan_rs(grasp_pose, None)
+            except Exception as e:
+                self.get_logger().warn(f"Grasp call failed: {e}")
+                ok = False
+            
+            self._publish_result({
+                "command": "scan_and_grasp",
+                "status": "done",
+                "method": "tri_view_triangulation",
+                "found": found,
+                "grasp_success": bool(ok)
+            })
+            
+        except Exception as e:
+            self.get_logger().error(f"Tri-view scan and grasp failed: {e}")
+            self._publish_result({
+                "command": "scan_and_grasp",
+                "status": "error",
+                "error": str(e)
+            })
+
+    def _pose_to_simple(self, pose):
+        try:
+            return {"x": pose.position.x, "y": pose.position.y, "z": pose.position.z}
+        except Exception:
+            return None
+
+    def _select_best_target(self, results: list, target_label: str = None) -> tuple:
+        """
+        Select best target from scan result。
+        
+        Strategy:
+        1. If target_label is specified, prioritize selecting this type of object
+        2. If not specified or specified type not found, select object with smallest physical size
+        
+        Note: Since bbox_px is pixel size, it is greatly affected by object distance，Therefore need to use depth normalization
+        to estimate real physical size. Normalized size = pixel size × depth distance。
+        
+        :param results: Result list returned by scan_views
+        :param target_label: Optional target label（such as "bottle", "cup", etc）
+        :return: (target_pose, view_name, detection_info) if target found, otherwise (None, None, None)
+        """
+        import math
+        
+        best_target = None
+        best_size = float('inf')
+        best_view = None
+        best_detection_info = None
+        
+        for view in results:
+            view_cmd = view.get("view_cmd")
+            poses = view.get("poses") or []
+            detections = view.get("detections") or []
+            
+            # If no detection result, skip
+            if not poses or not detections:
+                continue
+            
+            # Iterate through all detection results
+            for i, detection in enumerate(detections):
+                if i >= len(poses):
+                    break
+                
+                pose = poses[i]
+                label = detection.get("label") or detection.get("class_name") or ""
+                
+                # If target label specified, check if matches
+                if target_label:
+                    if label.lower() != target_label.lower():
+                        continue
+                
+                # Get bbox pixel size (needed in all cases)
+                bbox = detection.get("bbox_px") or {}
+                width_px = bbox.get("w", 0)
+                height_px = bbox.get("h", 0)
+                
+                # Get object position for depth calculation
+                position = detection.get("position") or {}
+                x = position.get("x", 0)
+                y = position.get("y", 0)
+                
+                # Check if x and y are valid numbers (not NaN or None)
+                if x is None or y is None or math.isnan(x) or math.isnan(y):
+                    # If position invalid, use bbox size for rough depth estimation
+                    # This is a rough estimate, but better than using fixed value
+                    if width_px > 0 and height_px > 0:
+                        # Roughly estimate distance based on bbox size in image
+                        # Larger pixels mean closer object; smaller pixels mean farther object
+                        # Assuming average pixel size 200px corresponds to about 0.5 meter distance
+                        avg_px_size = math.sqrt(width_px * height_px)
+                        depth = max(0.3, min(1.5, 100.0 / avg_px_size))
+                        self.get_logger().warn(
+                            f"Object position invalid (NaN), using bbox to estimate depth: "
+                            f"label={label}, bbox={width_px:.0f}×{height_px:.0f}px, "
+                            f"est_depth={depth:.2f}m"
+                        )
+                    else:
+                        depth = 0.5  # Default 0.5 meters
+                        self.get_logger().warn(
+                            f"Both object position and size invalid, using default depth: label={label}, depth={depth}m"
+                        )
+                else:
+                    # Calculate horizontal distance to robot (depth)
+                    depth = math.sqrt(x*x + y*y)
+                    
+                    # If depth too small or 0, use default value to avoid division by zero error
+                    if depth < 0.1 or math.isnan(depth):
+                        depth = 0.5  # Default 0.5 meters
+                
+                # Use depth-normalized pixel size to estimate physical size
+                # Normalized size ≈ pixel size × depth / focal length estimation coefficient
+                # Simplified here as: normalized_size = pixel_area × depth²
+                # This allows fair comparison of objects at different distances
+                if width_px > 0 and height_px > 0:
+                    # Use square of depth for normalization, because object size projection in image is inversely proportional to square of distance
+                    normalized_size = (width_px * height_px) * (depth ** 2)
+                else:
+                    # If no size info, use a default large size value
+                    normalized_size = float('inf')
+                
+                # Select object with smallest normalized size
+                if normalized_size < best_size:
+                    best_size = normalized_size
+                    best_target = pose
+                    best_view = view_cmd
+                    best_detection_info = {
+                        "label": label,
+                        "confidence": detection.get("confidence"),
+                        "bbox_px": bbox,
+                        "position": detection.get("position"),
+                        "depth": depth,
+                        "normalized_size": normalized_size
+                    }
+                    
+                    self.get_logger().info(
+                        f"Found candidate target: label={label}, "
+                        f"bbox={width_px:.0f}×{height_px:.0f}px, depth={depth:.2f}m, "
+                        f"norm_size={normalized_size:.1f}, view={view_cmd}, "
+                        f"conf={detection.get('confidence', 0):.2f}"
+                    )
+        
+        if best_target:
+            self.get_logger().info(
+                f"Selected best target: label={best_detection_info['label']}, "
+                f"norm_size={best_size:.1f}, depth={best_detection_info.get('depth', 0):.2f}m, "
+                f"view={best_view}"
+            )
+        
+        return best_target, best_view, best_detection_info
+
+    def _do_hand_delivery_tri_view(self):
+        """Execute hand delivery task (using tri-view intelligent measurement)"""
+        try:
+            self.get_logger().info("🤝 Starting hand delivery task (tri-view mode)...")
+            
+            # Step 1: Tri-view intelligent scan to find target object
+            self.get_logger().info("Step 1: Tri-view intelligent scan for target object...")
+            # baseline encoding: 0.15 represents 15 degrees, need to convert to real angle
+            angle_degrees = self.baseline * 100.0
+            results = self.yolo.scan_tri_view(
+                angle_offset=angle_degrees,  # Converted angle (degrees)
+                timeout=self.dual_view_timeout
+            )
+            
+            if not results:
+                self.get_logger().warn("Target object not found，task terminated")
+                self._publish_result({
+                    "command": "hand_delivery",
+                    "status": "error",
+                    "method": "tri_view_triangulation",
+                    "error": "no_object_found"
+                })
+                return
+            
+            # Selected smallest object as target
+            target = self._select_smallest_from_tri_view(results)
+            
+            if not target:
+                self.get_logger().warn("Unable to select target object，task terminated")
+                self._publish_result({
+                    "command": "hand_delivery",
+                    "status": "error",
+                    "error": "target_selection_failed"
+                })
+                return
+            
+            self.get_logger().info(
+                f"Found target object: {target.get('label')} "
+                f"(conf={target.get('confidence', 0):.2f}, "
+                f"measured={target.get('measured', False)})"
+            )
+            
+            # Extract grasp pose
+            target_pose = self._extract_grasp_pose_from_detection(target)
+            
+            if target_pose is None:
+                self.get_logger().warn("Unable to extract grasp pose，task terminated")
+                self._publish_result({
+                    "command": "hand_delivery",
+                    "status": "error",
+                    "phase": "scan",
+                    "error": "invalid_grasp_pose"
+                })
+                return
+            
+            # Phase 1 complete: publish scan result
+            self._publish_result({
+                "command": "hand_delivery",
+                "status": "scan_complete",
+                "phase": "scan",
+                "method": "tri_view_triangulation",
+                "object": {
+                    "label": target.get("label"),
+                    "confidence": target.get("confidence"),
+                    "position": target.get("position"),
+                    "dimensions": target.get("dimensions"),
+                    "measured": target.get("measured", False),
+                    "depth_error": target.get("depth_error"),
+                    "size_error": target.get("size_error")
+                },
+                "object_pose": self._pose_to_simple(target_pose),
+                "total_objects": len(results)
+            })
+            
+            # Step 2: Execute grasp and lift
+            self.get_logger().info("Step 2: Grasp object and lift...")
+            grasp_success = self.yolo.grasp_and_lift(target_pose)
+            
+            if not grasp_success:
+                self.get_logger().warn("Grasp failed, task terminated")
+                self._publish_result({
+                    "command": "hand_delivery",
+                    "status": "error",
+                    "phase": "grasp",
+                    "method": "tri_view_triangulation",
+                    "error": "grasp_failed",
+                    "object": target
+                })
+                return
+            
+            # Phase 2 complete: publish grasp success result
+            self._publish_result({
+                "command": "hand_delivery",
+                "status": "grasp_complete",
+                "phase": "grasp",
+                "method": "tri_view_triangulation",
+                "object": {
+                    "label": target.get("label"),
+                    "position": target.get("position"),
+                    "dimensions": target.get("dimensions")
+                },
+                "object_pose": self._pose_to_simple(target_pose),
+                "grasp_success": True
+            })
+            
+            # Step 3: Waiting to detect hand
+            self.get_logger().info("Step 3: Waiting to detect hand position...")
+            hand_pose = self.yolo.wait_for_hand_detection(timeout=30.0)
+            
+            if hand_pose is None:
+                self.get_logger().warn("Hand not detected，task terminated")
+                self._publish_result({
+                    "command": "hand_delivery",
+                    "status": "error",
+                    "phase": "hand_detection",
+                    "error": "no_hand_detected"
+                })
+                # Try to return to home position
+                try:
+                    self.yolo.go_to_home_position()
+                except Exception:
+                    pass
+                return
+            
+            # Step 4: Move above hand and release
+            self.get_logger().info("Step 4: Moving above hand and releasing object...")
+            delivery_success = self.yolo.deliver_to_hand(hand_pose)
+            
+            if delivery_success:
+                self.get_logger().info("✅ Hand delivery task complete!")
+                self._publish_result({
+                    "command": "hand_delivery",
+                    "status": "success",
+                    "phase": "delivery_complete",
+                    "method": "tri_view_triangulation",
+                    "object": {
+                        "label": target.get("label"),
+                        "position": target.get("position"),
+                        "dimensions": target.get("dimensions"),
+                        "measured": target.get("measured", False)
+                    },
+                    "object_pose": self._pose_to_simple(target_pose),
+                    "hand_pose": self._pose_to_simple(hand_pose)
+                })
+            else:
+                self.get_logger().warn("Delivery to hand failed")
+                self._publish_result({
+                    "command": "hand_delivery",
+                    "status": "error",
+                    "phase": "delivery",
+                    "error": "delivery_failed"
+                })
+                
+        except Exception as e:
+            self.get_logger().error(f"Hand delivery task exception: {e}")
+            self._publish_result({
+                "command": "hand_delivery",
+                "status": "error",
+                "error": str(e)
+            })
+
+    def _select_smallest_from_tri_view(self, results: list) -> dict:
+        """
+        Select smallest object from tri-view measurement result
+        
+        :param results: Result list returned by scan_tri_view
+        :return: Detection info of smallest object, return None if none
+        """
+        import math
+        
+        if not results:
+            return None
+        
+        smallest = None
+        smallest_volume = float('inf')
+        
+        for obj in results:
+            # Get size info
+            dims = obj.get("dimensions")
+            if not dims:
+                continue
+            
+            width = dims.get("width", 0)
+            depth = dims.get("depth", 0)
+            height = dims.get("height", 0)
+            
+            # Calculate volume
+            if width > 0 and depth > 0 and height > 0:
+                volume = width * depth * height
+                
+                if volume < smallest_volume:
+                    smallest_volume = volume
+                    smallest = obj
+                    
+                    self.get_logger().info(
+                        f"Candidate object: {obj.get('label')}, "
+                        f"size={width*1000:.1f}×{depth*1000:.1f}×{height*1000:.1f}mm, "
+                        f"volume={volume*1e9:.1f}cm³"
+                    )
+        
+        if smallest:
+            self.get_logger().info(
+                f"✅ Selected smallest object: {smallest.get('label')}, "
+                f"volume={smallest_volume*1e9:.1f}cm³"
+            )
+        
+        return smallest
+
+    def _extract_grasp_pose_from_detection(self, detection: dict):
+        """
+        Extract grasp pose from detection result
+        
+        :param detection: Detection info dictionary
+        :return: Pose object, return None if extraction failed
+        """
+        from geometry_msgs.msg import Pose, Point, Quaternion
+        
+        # Prioritize using grasp_pose
+        grasp_info = detection.get("grasp_pose")
+        if grasp_info:
+            try:
+                pose = Pose()
+                
+                # Extract position
+                pos = grasp_info.get("position")
+                if pos:
+                    pose.position.x = float(pos.get("x", 0))
+                    pose.position.y = float(pos.get("y", 0))
+                    pose.position.z = float(pos.get("z", 0))
+                
+                # Extract pose
+                ori = grasp_info.get("orientation")
+                if ori:
+                    pose.orientation.x = float(ori.get("x", 0))
+                    pose.orientation.y = float(ori.get("y", 0))
+                    pose.orientation.z = float(ori.get("z", 0))
+                    pose.orientation.w = float(ori.get("w", 1))
+                else:
+                    # Default pose
+                    pose.orientation.w = 1.0
+                
+                return pose
+            except Exception as e:
+                self.get_logger().warn(f"Extraction from grasp_pose failed: {e}")
+        
+        # Fallback: Use object center position
+        pos = detection.get("position")
+        if pos:
+            try:
+                pose = Pose()
+                pose.position.x = float(pos.get("x", 0))
+                pose.position.y = float(pos.get("y", 0))
+                pose.position.z = float(pos.get("z", 0))
+                pose.orientation.w = 1.0
+                
+                self.get_logger().info("Using object center position as grasp point")
+                return pose
+            except Exception as e:
+                self.get_logger().warn(f"Extraction from position failed: {e}")
+        
+        return None
+
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = None
+    executor = None
+    try:
+        node = ArmCommandInterface()
+
+        # Create a SingleThreadedExecutor and add both nodes to it to avoid multiple rclpy.spin calls
+        import rclpy.executors as rex
+
+        ExecST = getattr(rex, "SingleThreadedExecutor", None)
+        if ExecST is None:
+            raise RuntimeError("SingleThreadedExecutor not available")
+        executor = ExecST(context=node.context)
+        executor.add_node(node)
+        try:
+            executor.add_node(node.yolo)
+        except Exception:
+            node.get_logger().warn("Unable to add internal yolo node to executor")
+
+        try:
+            executor.spin()
+        except KeyboardInterrupt:
+            pass
+    except Exception as e:
+        # fallback to simple spin if executor couldn't be created
+        if node:
+            node.get_logger().error(f"Executor creation/execution failed: {e}; Falling back to rclpy.spin(node)")
+            try:
+                rclpy.spin(node)
+            except Exception:
+                pass
+        else:
+            print(f"Executor creation failed and node not created: {e}")
+    finally:
+        # Cleanup: shutdown executor and remove node
+        try:
+            if executor is not None:
+                    executor.shutdown()
+                    executor.remove_node(node)
+                    executor.remove_node(node.yolo)
+            node.get_logger().info("Destroying node and exiting...")
+            if hasattr(node, "yolo") and node.yolo is not None:
+                node.yolo.destroy_node()
+            rclpy.shutdown()
+        except Exception:
+            pass
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>arm_bringup</name>
+  <version>1.0.0</version>
+  <description>Bringup package for the robotic arm system with various launch configurations</description>
+  <maintainer email="contect@lododo.org">lododo</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Dependencies for all subsystems -->
+  <exec_depend>arm_description</exec_depend>
+  <exec_depend>arm_driver_node</exec_depend>
+  <exec_depend>arm_moveit_config</exec_depend>
+  <exec_depend>arm_perception_yolo</exec_depend>
+  <exec_depend>arm_planning_py</exec_depend>
+  <exec_depend>arm_voice_interface</exec_depend>
+  <exec_depend>arm_rviz_plugin</exec_depend>
+
+  <!-- ROS2 core dependencies -->
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  
+  <!-- Gazebo simulation -->
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>gazebo_ros2_control</exec_depend>
+  
+  <!-- MoveIt -->
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_ros_visualization</exec_depend>
+  
+  <!-- Controllers -->
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>ros2_controllers</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

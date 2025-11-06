@@ -1,0 +1,30 @@
+# Camera calibration file
+# 640x480 resolution
+# ⚠️ Focal length fx=1128.1 calibrated from actual measurement (mouse 10cm @ 147px → 33cm, considering top-view angle 0.43)
+
+image_width: 640
+image_height: 480
+camera_name: usb_cam
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [1128.1, 0.0, 320.0,
+         0.0, 1128.1, 240.0,
+         0.0, 0.0, 1.0]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [0.0, 0.0, 0.0, 0.0, 0.0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0,
+         0.0, 1.0, 0.0,
+         0.0, 0.0, 1.0]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [1128.1, 0.0, 320.0, 0.0,
+         0.0, 1128.1, 240.0, 0.0,
+         0.0, 0.0, 1.0, 0.0]

@@ -1,0 +1,10 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: arm_description
+    relative_path: urdf/arm.xacro
+  srdf:
+    relative_path: config/arm.srdf
+  package_settings:
+    author_name: lododo
+    author_email: contect@lododo.org
+    generated_timestamp: 1753845638
