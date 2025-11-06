@@ -1,82 +1,171 @@
-# Lododo Arm - Intelligent Robotic Arm System
+<div align="center">
+
+# 🦾 Lododo Arm
+
+**Complete ROS2 Humble Robotic Arm Control System**
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![ROS2](https://img.shields.io/badge/ROS2-Humble-green.svg)](https://docs.ros.org/en/humble/)
-[![Python](https://img.shields.io/badge/Python-3.10-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![C++](https://img.shields.io/badge/C++-17-orange.svg)](https://isocpp.org/)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-orange.svg)](https://ubuntu.com/)
 
-An intelligent robotic arm system integrating computer vision, motion planning, and voice control based on ROS2.
+[![MoveIt2](https://img.shields.io/badge/MoveIt2-Enabled-purple.svg)](https://moveit.ros.org/)
+[![YOLO](https://img.shields.io/badge/YOLO-v8-yellow.svg)](https://github.com/ultralytics/ultralytics)
+[![Distributed](https://img.shields.io/badge/Deployment-Distributed-red.svg)](docs/distributed_deployment.md)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing) • [License](#-license)
+
+---
+
+</div>
+
+An intelligent robotic arm system integrating computer vision, motion planning, and voice control based on ROS2 Humble. Supports distributed deployment with Raspberry Pi for hardware control and PC for planning/perception.
 
 ## ✨ Features
 
-- 🤖 **6-DOF Robotic Arm** - Full motion control using Feetech servos
-- 👁️ **Computer Vision** - YOLOv8-based object detection with stereo vision
-- 🎯 **Intelligent Grasping** - Automatic grasp planning with MoveIt2
-- 🗣️ **Voice Control** - Natural language commands using Vosk
-- 📊 **Real-time Monitoring** - Custom RViz plugin for system control
-- 🎲 **Cube Detection** - Specialized mode for detecting and picking cubes
+### 🤖 Hardware Control
+- **6-DOF Robotic Arm** - Full motion control using Feetech ST3215 servos
+- **Gripper Control** - Precision grasping with rotation support
+- **RealSense D435i** - Depth camera for 3D perception
+- **Distributed Deployment** - Raspberry Pi + PC architecture
+
+### 🎯 Motion Planning
+- **MoveIt2 Integration** - Professional motion planning framework
+- **Collision Avoidance** - Safe trajectory generation
+- **Inverse Kinematics** - Automatic joint angle calculation
+- **Custom Move Groups** - Flexible control configurations
+
+### 👁️ Computer Vision
+- **YOLOv8 Detection** - Real-time object detection
+- **Cube Detection Mode** - Optimized for cube grasping tasks
+- **Dual-View Triangulation** - Enhanced 3D position estimation
+- **Depth Integration** - Precise spatial localization
+
+### 🗣️ Voice Control (Optional)
+- **Natural Language Commands** - Vosk-based speech recognition
+- **Chinese/English Support** - Multi-language interface
+- **Custom Command Mapping** - Configurable voice actions
+
+### 📊 Visualization & Control
+- **Custom RViz Plugin** - Interactive control panel
+- **Real-time Monitoring** - System status display
+- **Debug Tools** - Comprehensive logging and diagnostics
 
 ## 🏗️ System Architecture
 
 ```
-├── arm_bringup          # Launch files and startup scripts
-├── arm_description      # URDF robot models
-├── arm_driver_node      # Hardware driver for Feetech servos
-├── arm_interfaces       # Custom ROS2 message definitions
-├── arm_moveit_config    # MoveIt2 configuration
-├── arm_perception_yolo  # YOLOv8 object detection
-├── arm_perception_rtdetr # RT-DETR detection (experimental)
-├── arm_planning_py      # Motion planning and grasping logic
-├── arm_rviz_plugin      # Custom RViz control panel
-└── arm_voice_interface  # Voice command interface
+┌─────────────────────────────────┐         ┌──────────────────────────────────┐
+│   Raspberry Pi (Robot Side)     │         │    PC (Control Side)             │
+│  ───────────────────────────────  │         │  ────────────────────────────────  │
+│  • arm_driver_node              │         │  • move_group (MoveIt2)          │
+│  • robot_state_publisher        │ <──DDS──> │  • arm_planning_py_node          │
+│  • realsense2_camera            │  Network  │  • yolo_perception_node          │
+│  • joint_state_publisher        │         │  • rviz2                         │
+│                                 │         │  • arm_voice_node (optional)     │
+└─────────────────────────────────┘         └──────────────────────────────────┘
+```
+
+### 📦 Package Structure
+
+```
+├── arm_bringup          # System integration & launch files
+├── arm_description      # URDF robot models & kinematics
+├── arm_driver_node      # Feetech servo hardware driver (C++)
+├── arm_interfaces       # Custom ROS2 messages & services
+├── arm_moveit_config    # MoveIt2 motion planning config
+├── arm_perception_yolo  # YOLOv8 vision perception system
+├── arm_planning_py      # Motion planning & grasping logic (Python)
+├── arm_rviz_plugin      # Custom RViz control panel (C++)
+└── arm_voice_interface  # Voice command interface (Python)
 ```
 
 ## 📋 Prerequisites
 
-### Hardware Requirements
-- 6-DOF robotic arm with Feetech servos (ST3215 or compatible)
-- USB camera (640x480 or higher)
-- Ubuntu 22.04 (recommended)
+### 🔧 Hardware Requirements
 
-### Software Requirements
-- ROS2 Humble
-- Python 3.10+
-- PyTorch (for YOLO)
-- MoveIt2
-- OpenCV
+**Minimum Configuration:**
+- 6-DOF robotic arm with Feetech ST3215 servos
+- Intel RealSense D435i depth camera (or compatible USB camera)
+- Ubuntu 22.04 LTS
+- 8GB RAM, 4-core CPU
+
+**Recommended Configuration (Distributed):**
+- Raspberry Pi 4 (4GB+) - Robot side hardware control
+- PC with Ubuntu 22.04 - Planning and perception
+- Same LAN network connection
+
+### 💻 Software Requirements
+
+- **ROS2 Humble** - Robot Operating System 2
+- **Python 3.10+** - Main programming language
+- **MoveIt2** - Motion planning framework
+- **PyTorch** - Deep learning (YOLO perception)
+- **OpenCV** - Computer vision
+- **Ultralytics** - YOLOv8 implementation
 
 ## 🚀 Quick Start
 
-### 1. Installation
+### Step 1: Clone Repository
 
 ```bash
-# Clone repository (ROS2 workspace structure)
+# Create ROS2 workspace
 mkdir -p ~/lododo-arm/src
 cd ~/lododo-arm/src
+
+# Clone repository (note the . at the end)
 git clone https://github.com/harryzy/lododo-arm.git .
 cd ~/lododo-arm
+```
 
-# Install dependencies
+### Step 2: Install Dependencies
+
+```bash
+# Install ROS2 packages
 sudo apt update
-sudo apt install ros-humble-desktop ros-humble-moveit ros-humble-gazebo-ros2-control
+sudo apt install -y \
+    ros-humble-moveit \
+    ros-humble-realsense2-camera \
+    ros-humble-realsense2-description \
+    python3-pip
 
 # Install Python dependencies
-pip install ultralytics opencv-python numpy vosk
+pip3 install pyserial numpy scipy ultralytics opencv-python
+```
 
-# Build the workspace
-colcon build --symlink-install
+### Step 3: Build Workspace
+
+```bash
+cd ~/lododo-arm
+colcon build
 
 # Source the workspace
 source install/setup.bash
 ```
 
-### 2. Launch the System
+### Step 4: Launch System
 
-**For Real Hardware:**
+**Single Machine (All-in-One):**
 ```bash
+# Launch complete system
 ros2 launch arm_bringup real_bringup.launch.py
 ```
 
-**For Simulation:**
+**Distributed Deployment (Recommended):**
+
+```bash
+# On Raspberry Pi (robot side)
+ros2 launch arm_bringup robot_side.launch.py
+
+# On PC (control side) - Terminal 1
+ros2 launch arm_bringup pc_side.launch.py
+
+# On PC - Terminal 2 (YOLO perception)
+ros2 run arm_bringup start_yolo_cube_detect.sh
+```
+
+**Simulation:**
 ```bash
 ros2 launch arm_bringup sim_bringup.launch.py
 ```
@@ -145,26 +234,58 @@ Key configuration files:
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+We welcome contributions! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting PRs.
+
+### How to Contribute
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## 📝 License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
 
-## 👨‍💻 Author
+```
+Copyright 2024 lododo
 
-**lododo**
-- GitHub: [@harryzy](https://github.com/harryzy)
-- Email: contect@lododo.org
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+```
+
+## � Authors & Contributors
+
+**Main Developer:**
+- **lododo** - *Initial work and maintenance*
+  - GitHub: [@harryzy](https://github.com/harryzy)
+  - Email: contect@lododo.org
+
+See also the list of [contributors](https://github.com/harryzy/lododo-arm/contributors) who participated in this project.
 
 ## 🙏 Acknowledgments
 
-- ROS2 and MoveIt2 communities
-- Ultralytics YOLOv8
-- Vosk speech recognition
-- Feetech servo SDK
+- **ROS2 & MoveIt2** - Robot Operating System and motion planning
+- **Ultralytics** - YOLOv8 object detection framework
+- **Intel RealSense** - Depth camera SDK and ROS2 wrapper
+- **Vosk** - Offline speech recognition
+- **Feetech** - Servo motor SDK
+- **Open Robotics** - ROS2 ecosystem and tools
+
+## 📞 Support & Contact
+
+- **Issues**: [GitHub Issues](https://github.com/harryzy/lododo-arm/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/harryzy/lododo-arm/discussions)
+- **Email**: contect@lododo.org
+
+## ⭐ Star History
+
+If you find this project useful, please consider giving it a star ⭐️
 
 ## 📊 Project Status
+
+**Active Development** | Last Updated: November 2024
 
 Current Version: v0.972
 
