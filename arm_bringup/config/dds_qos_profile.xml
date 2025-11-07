@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+DDS QoS Profile for Distributed Deployment
+Optimized for PC <-> Raspberry Pi communication over LAN
+
+This configuration improves reliability of Action communication
+which is critical for MoveIt trajectory execution.
+
+Usage:
+  export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/dds_qos_profile.xml
+  
+Or set in launch file environment.
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    
+    <!-- Default profile for all DDS communication -->
+    <participant profile_name="default_participant" is_default_profile="true">
+        <rtps>
+            <name>default_participant</name>
+            
+            <!-- Increase socket buffer sizes for better throughput -->
+            <sendSocketBufferSize>1048576</sendSocketBufferSize>  <!-- 1MB -->
+            <listenSocketBufferSize>4194304</listenSocketBufferSize>  <!-- 4MB -->
+            
+            <!-- User data transport (UDP) -->
+            <userTransports>
+                <transport_id>udp_transport</transport_id>
+            </userTransports>
+            
+            <useBuiltinTransports>true</useBuiltinTransports>
+        </rtps>
+    </participant>
+    
+    <!-- Reliable profile for Action communication -->
+    <data_writer profile_name="reliable_writer">
+        <qos>
+            <reliability>
+                <kind>RELIABLE</kind>
+                <max_blocking_time>
+                    <sec>5</sec>
+                    <nanosec>0</nanosec>
+                </max_blocking_time>
+            </reliability>
+            
+            <durability>
+                <kind>TRANSIENT_LOCAL</kind>
+            </durability>
+            
+            <history>
+                <kind>KEEP_LAST</kind>
+                <depth>100</depth>  <!-- Increased from default 10 -->
+            </history>
+            
+            <liveliness>
+                <kind>AUTOMATIC</kind>
+                <lease_duration>
+                    <sec>10</sec>
+                    <nanosec>0</nanosec>
+                </lease_duration>
+            </liveliness>
+        </qos>
+        
+        <historyMemoryPolicy>DYNAMIC</historyMemoryPolicy>
+    </data_writer>
+    
+    <data_reader profile_name="reliable_reader">
+        <qos>
+            <reliability>
+                <kind>RELIABLE</kind>
+            </reliability>
+            
+            <durability>
+                <kind>TRANSIENT_LOCAL</kind>
+            </durability>
+            
+            <history>
+                <kind>KEEP_LAST</kind>
+                <depth>100</depth>  <!-- Increased from default 10 -->
+            </history>
+            
+            <liveliness>
+                <kind>AUTOMATIC</kind>
+                <lease_duration>
+                    <sec>10</sec>
+                    <nanosec>0</nanosec>
+                </lease_duration>
+            </liveliness>
+        </qos>
+        
+        <historyMemoryPolicy>DYNAMIC</historyMemoryPolicy>
+    </data_reader>
+    
+    <!-- UDP transport configuration -->
+    <transport_descriptors>
+        <transport_descriptor>
+            <transport_id>udp_transport</transport_id>
+            <type>UDPv4</type>
+            <sendBufferSize>1048576</sendBufferSize>
+            <receiveBufferSize>4194304</receiveBufferSize>
+            <maxMessageSize>65536</maxMessageSize>  <!-- 64KB max message -->
+            <TTL>16</TTL>
+        </transport_descriptor>
+    </transport_descriptors>
+    
+</profiles>

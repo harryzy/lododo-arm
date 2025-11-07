@@ -48,6 +48,7 @@ from launch.actions import (
     TimerAction,
     LogInfo,
     GroupAction,
+    SetEnvironmentVariable,
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -106,6 +107,19 @@ def generate_launch_description():
     moveit_config_pkg = FindPackageShare('arm_moveit_config')
     rviz_plugin_pkg = FindPackageShare('arm_rviz_plugin')
     arm_perception_pkg = FindPackageShare('arm_perception_yolo')
+    arm_bringup_pkg = FindPackageShare('arm_bringup')
+
+    # Set DDS QoS profile for reliable Action communication in distributed deployment
+    dds_qos_file = PathJoinSubstitution([
+        arm_bringup_pkg,
+        'config',
+        'dds_qos_profile.xml'
+    ])
+    
+    set_dds_profile = SetEnvironmentVariable(
+        name='FASTRTPS_DEFAULT_PROFILES_FILE',
+        value=dds_qos_file
+    )
 
     # 1. Launch MoveIt2 move_group (reuse from arm_moveit_config)
     # Note: move_group_simple_launch.py provides just move_group without driver/rviz
@@ -190,6 +204,9 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        # DDS QoS configuration (must be first to affect all nodes)
+        set_dds_profile,
+        
         # Launch arguments
         use_rviz_arg,
         use_voice_control_arg,
