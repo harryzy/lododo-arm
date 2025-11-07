@@ -2,12 +2,14 @@
 """
 PC Side Launch File for Distributed Deployment
 
-This launch file runs on the PC (control station).
-It includes:
-- MoveIt2 motion planning
-- RViz visualization
+This launch file runs on the PC (control station) for distributed deployment.
+Robot side must be running robot_side.launch.py on Raspberry Pi.
+
+This launch file includes:
+- MoveIt2 move_group (motion planning)
+- RViz with custom control panel
+- Arm planning interface node
 - Voice control interface (optional)
-- Planning execution node
 
 NOTE: YOLO perception node must be started separately using:
       ros2 run arm_bringup start_yolo_cube_detect.sh
@@ -23,12 +25,17 @@ NOTE: YOLO perception node must be started separately using:
 
 Hardware Requirements:
 - PC with network connection to robot
-- GPU recommended for YOLO (launched separately)
+- GPU recommended for YOLO perception (launched separately)
 
 Network Requirements:
 - Both robot and PC must be on the same network
 - ROS_DOMAIN_ID must match on both sides
-- Robot side must be running robot_side.launch.py
+- Robot side (Raspberry Pi) must be running robot_side.launch.py
+
+Launch Arguments:
+- use_rviz: Launch RViz visualization (default: true)
+- use_voice_control: Enable voice control interface (default: false)
+- log_level: Logging level (default: info)
 
 Author: lododo
 License: Apache 2.0
@@ -38,135 +45,164 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
-    TimerAction
+    TimerAction,
+    LogInfo,
+    GroupAction,
 )
-from launch.substitutions import (
-    LaunchConfiguration,
-    PathJoinSubstitution,
-    PythonExpression
-)
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-from launch.conditions import IfCondition
+from ament_index_python.packages import get_package_share_directory
 import os
+import yaml
+
+
+def load_yaml_config(package_name, config_file):
+    """Load YAML configuration file and return as dict"""
+    try:
+        config_path = os.path.join(
+            get_package_share_directory(package_name),
+            'config',
+            config_file
+        )
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        print(f"Warning: Could not load config file {config_file}: {e}")
+        return {}
 
 
 def generate_launch_description():
-    # Declare launch arguments
-    rviz_arg = DeclareLaunchArgument(
-        "rviz",
-        default_value="true",
-        description="Launch RViz for visualization"
+    # Load default configuration from YAML
+    default_config = load_yaml_config('arm_bringup', 'default_params.yaml')
+
+    # Declare launch arguments with values from YAML config
+    use_rviz_arg = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='true',
+        description='Launch RViz with custom control panel'
     )
     
-    voice_control_arg = DeclareLaunchArgument(
-        "voice_control",
-        default_value="false",
-        description="Enable voice control interface"
+    use_voice_control_arg = DeclareLaunchArgument(
+        'use_voice_control',
+        default_value='false',
+        description='Enable voice control interface'
     )
-    
-    ros_domain_id_arg = DeclareLaunchArgument(
-        "ros_domain_id",
-        default_value="0",
-        description="ROS_DOMAIN_ID for DDS communication (must match robot side)"
+
+    log_level_arg = DeclareLaunchArgument(
+        'log_level',
+        default_value=str(default_config.get('default_log_level', 'info')),
+        description='Logging level (debug, info, warn, error, fatal)'
     )
-    
+
     # Get launch configurations
-    rviz = LaunchConfiguration("rviz")
-    voice_control = LaunchConfiguration("voice_control")
-    
-    # Get package paths
-    arm_moveit_config_share = FindPackageShare("arm_moveit_config")
-    arm_description_share = FindPackageShare("arm_description")
-    arm_bringup_share = FindPackageShare("arm_bringup")
-    
-    # MoveIt2 Configuration
-    moveit_launch = IncludeLaunchDescription(
+    use_rviz = LaunchConfiguration('use_rviz')
+    use_voice_control = LaunchConfiguration('use_voice_control')
+    log_level = LaunchConfiguration('log_level')
+
+    # Package directories
+    moveit_config_pkg = FindPackageShare('arm_moveit_config')
+    rviz_plugin_pkg = FindPackageShare('arm_rviz_plugin')
+    arm_perception_pkg = FindPackageShare('arm_perception_yolo')
+
+    # 1. Launch MoveIt2 move_group (reuse from arm_moveit_config)
+    # Note: move_group_simple_launch.py provides just move_group without driver/rviz
+    move_group_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
-            PathJoinSubstitution([
-                arm_moveit_config_share,
-                "launch",
-                "move_group.launch.py"
-            ])
+            PathJoinSubstitution([moveit_config_pkg, 'launch', 'move_group_simple_launch.py'])
         ]),
         launch_arguments={
-            "use_sim_time": "false",
-            "publish_monitored_planning_scene": "true"
+            'use_sim_time': 'false',
         }.items()
     )
-    
-    # RViz with MoveIt plugin
-    rviz_config_file = PathJoinSubstitution([
-        arm_moveit_config_share,
-        "config",
-        "moveit.rviz"
+
+    # 2. Launch RViz with custom control panel (delayed to ensure move_group is ready)
+    # Reuse arm_control_rviz.launch.py from arm_rviz_plugin
+    rviz_launch = GroupAction(
+        condition=IfCondition(use_rviz),
+        actions=[
+            LogInfo(msg='[INFO] Starting RViz with custom control panel in 5 seconds...'),
+            TimerAction(
+                period=5.0,
+                actions=[
+                    IncludeLaunchDescription(
+                        PythonLaunchDescriptionSource([
+                            PathJoinSubstitution([rviz_plugin_pkg, 'launch', 'arm_control_rviz.launch.py'])
+                        ])
+                    )
+                ]
+            )
+        ]
+    )
+
+    # 3. Launch arm planning interface node
+    # Note: This is the high-level planning node that receives commands from RViz panel
+    measurement_params_path = PathJoinSubstitution([
+        arm_perception_pkg,
+        'config',
+        'measurement_params.yaml'
     ])
     
-    rviz_node = Node(
-        package="rviz2",
-        executable="rviz2",
-        name="rviz2",
-        output="screen",
-        arguments=["-d", rviz_config_file],
-        parameters=[{
-            "use_sim_time": False
-        }],
-        condition=IfCondition(rviz)
-    )
-    
-    # Planning Execution Node
     planning_node = Node(
-        package="arm_planning_py",
-        executable="arm_planning_py_node",
-        name="arm_planning_py_node",
-        parameters=[{
-            "use_sim_time": False,
-            "planning_time": 5.0,
-            "planning_attempts": 10,
-            "max_velocity_scaling_factor": 0.3,
-            "max_acceleration_scaling_factor": 0.3
-        }],
-        output="screen",
-        respawn=True,
-        respawn_delay=3.0
+        package='arm_planning_py',
+        executable='arm_command_interface',
+        name='arm_command_interface',
+        output='screen',
+        parameters=[measurement_params_path],
+        arguments=['--ros-args', '--log-level', log_level]
     )
-    
-    # Voice Control Interface (optional)
-    voice_node = Node(
-        package="arm_voice_interface",
-        executable="arm_voice_node",
-        name="arm_voice_node",
-        parameters=[{
-            "use_sim_time": False,
-            "language_model": "vosk-model-small-cn-0.22",  # Chinese model
-            "confidence_threshold": 0.8
-        }],
-        output="screen",
-        condition=IfCondition(voice_control)
+
+    # 4. Launch voice control interface (conditional)
+    voice_control_node = GroupAction(
+        condition=IfCondition(use_voice_control),
+        actions=[
+            LogInfo(msg='[INFO] Starting voice control interface...'),
+            Node(
+                package='arm_voice_interface',
+                executable='arm_voice_node',
+                name='arm_voice_node',
+                output='screen',
+                arguments=['--ros-args', '--log-level', log_level]
+            )
+        ]
     )
-    
-    # Delay planning node to ensure MoveIt is ready
-    delayed_planning_node = TimerAction(
-        period=3.0,
-        actions=[planning_node]
+
+    # Startup info
+    startup_info = LogInfo(
+        msg=[
+            '\n',
+            '='*60, '\n',
+            'Starting PC Side (Distributed Deployment)\n',
+            '='*60, '\n',
+            'RViz: ', use_rviz, '\n',
+            'Voice Control: ', use_voice_control, '\n',
+            '\n',
+            'IMPORTANT: Robot side must be running on Raspberry Pi!\n',
+            '  ssh lododo@<raspberry-pi-ip>\n',
+            '  ros2 launch arm_bringup robot_side.launch.py\n',
+            '\n',
+            'NOTE: YOLO perception must be started separately:\n',
+            '  ros2 run arm_bringup start_yolo_cube_detect.sh\n',
+            '='*60, '\n'
+        ]
     )
-    
+
     return LaunchDescription([
         # Launch arguments
-        rviz_arg,
-        voice_control_arg,
-        ros_domain_id_arg,
+        use_rviz_arg,
+        use_voice_control_arg,
+        log_level_arg,
         
-        # MoveIt2 (includes move_group and other planning components)
-        moveit_launch,
+        # Startup info
+        startup_info,
         
-        # Visualization
-        rviz_node,
+        # Launch files (reuse existing launch files)
+        move_group_launch,  # MoveIt2 move_group (from arm_moveit_config)
+        rviz_launch,        # Custom RViz with control panel (from arm_rviz_plugin)
         
-        # High-level nodes (with delays to ensure dependencies are ready)
-        delayed_planning_node,
-        
-        # Optional: Voice control
-        voice_node,
+        # Nodes
+        planning_node,      # Arm planning interface
+        voice_control_node, # Voice control (optional)
     ])
