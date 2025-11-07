@@ -117,17 +117,19 @@ def generate_launch_description():
     arm_bringup_pkg = FindPackageShare('arm_bringup')
     arm_driver_pkg = FindPackageShare('arm_driver_node')
     
-    # Set DDS QoS profile for reliable Action communication in distributed deployment
-    dds_qos_file = PathJoinSubstitution([
-        arm_bringup_pkg,
-        'config',
-        'dds_qos_profile.xml'
-    ])
-    
-    set_dds_profile = SetEnvironmentVariable(
-        name='FASTRTPS_DEFAULT_PROFILES_FILE',
-        value=dds_qos_file
-    )
+    # NOTE: DDS QoS configuration temporarily disabled
+    # Using default DDS behavior + controller timeout adjustments
+    # # Set DDS QoS profile for reliable Action communication in distributed deployment
+    # dds_qos_file = PathJoinSubstitution([
+    #     arm_bringup_pkg,
+    #     'config',
+    #     'dds_qos_profile.xml'
+    # ])
+    # 
+    # set_dds_profile = SetEnvironmentVariable(
+    #     name='FASTRTPS_DEFAULT_PROFILES_FILE',
+    #     value=dds_qos_file
+    # )
     
     # 1. Static transform publisher - publishes world to base_link transform
     # (same as driver_view_launch.py)
@@ -186,8 +188,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        # DDS QoS configuration (must be first to affect all nodes)
-        set_dds_profile,
+        # NOTE: DDS QoS configuration disabled (see comments above)
+        # set_dds_profile,
         
         # Launch arguments
         serial_port_arg,

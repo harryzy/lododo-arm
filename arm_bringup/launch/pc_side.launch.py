@@ -109,17 +109,24 @@ def generate_launch_description():
     arm_perception_pkg = FindPackageShare('arm_perception_yolo')
     arm_bringup_pkg = FindPackageShare('arm_bringup')
 
-    # Set DDS QoS profile for reliable Action communication in distributed deployment
-    dds_qos_file = PathJoinSubstitution([
-        arm_bringup_pkg,
-        'config',
-        'dds_qos_profile.xml'
-    ])
+    # NOTE: DDS QoS configuration temporarily disabled due to XML compatibility issues
+    # The timeout adjustments in moveit_controllers.yaml should be sufficient
+    # If Action communication issues persist, try:
+    # 1. Ensure both machines are on same subnet
+    # 2. Check firewall rules (allow UDP multicast)
+    # 3. Set RMW_FASTRTPS_PUBLICATION_MODE=ASYNCHRONOUS
     
-    set_dds_profile = SetEnvironmentVariable(
-        name='FASTRTPS_DEFAULT_PROFILES_FILE',
-        value=dds_qos_file
-    )
+    # # Set DDS QoS profile for reliable Action communication in distributed deployment
+    # dds_qos_file = PathJoinSubstitution([
+    #     arm_bringup_pkg,
+    #     'config',
+    #     'dds_qos_profile.xml'
+    # ])
+    # 
+    # set_dds_profile = SetEnvironmentVariable(
+    #     name='FASTRTPS_DEFAULT_PROFILES_FILE',
+    #     value=dds_qos_file
+    # )
 
     # 1. Launch MoveIt2 move_group (reuse from arm_moveit_config)
     # Note: move_group_simple_launch.py provides just move_group without driver/rviz
@@ -204,8 +211,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        # DDS QoS configuration (must be first to affect all nodes)
-        set_dds_profile,
+        # NOTE: DDS QoS configuration disabled (see comments above)
+        # set_dds_profile,
         
         # Launch arguments
         use_rviz_arg,
