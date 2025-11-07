@@ -120,7 +120,7 @@ cd ~/lododo-arm
 ```
 
 ### Step 2: Install Dependencies
-
+- [Install ROS2 humble](https://docs.ros.org/en/humble/#)
 ```bash
 # Install ROS2 packages
 sudo apt update
@@ -129,7 +129,7 @@ sudo apt install -y \
     ros-humble-realsense2-camera \
     ros-humble-realsense2-description \
     python3-pip
-
+sudo apt install python3-colcon-common-extensions -y
 # Install Python dependencies
 pip3 install pyserial numpy scipy ultralytics opencv-python
 ```
@@ -142,6 +142,9 @@ colcon build
 
 # Source the workspace
 source install/setup.bash
+
+# Source ros2 humble
+source /opt/ros/humble/setup.bash
 ```
 
 ### Step 4: Launch System
@@ -150,6 +153,9 @@ source install/setup.bash
 ```bash
 # Launch complete system
 ros2 launch arm_bringup real_bringup.launch.py
+
+# Terminal 2 (YOLO perception)
+ros2 run arm_bringup start_yolo_cube_detect.sh
 ```
 
 **Distributed Deployment (Recommended):**
