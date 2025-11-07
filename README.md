@@ -126,8 +126,7 @@ cd ~/lododo-arm
 sudo apt update
 sudo apt install -y \
     ros-humble-moveit \
-    ros-humble-realsense2-camera \
-    ros-humble-realsense2-description \
+    ros-humble-usb-cam \
     python3-pip
 sudo apt install python3-colcon-common-extensions -y
 # Install Python dependencies

@@ -47,6 +47,22 @@ from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
 from ament_index_python.packages import get_package_share_directory
 import os
+import yaml
+
+
+def load_yaml_config(package_name, config_file):
+    """Load YAML configuration file and return as dict"""
+    try:
+        config_path = os.path.join(
+            get_package_share_directory(package_name),
+            'config',
+            config_file
+        )
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        print(f"Warning: Could not load config file {config_file}: {e}")
+        return {}
 
 
 def generate_launch_description():
@@ -55,16 +71,19 @@ def generate_launch_description():
         "arm", package_name="arm_moveit_config"
     ).to_moveit_configs()
 
-    # Declare launch arguments
+    # Load default configuration from YAML
+    default_config = load_yaml_config('arm_bringup', 'default_params.yaml')
+
+    # Declare launch arguments with values from YAML config
     serial_port_arg = DeclareLaunchArgument(
         'serial_port',
-        default_value='/dev/ttyUSB0',
+        default_value=str(default_config.get('serial_port', '/dev/ttyACM0')),
         description='Serial port for robot communication'
     )
     
     baud_rate_arg = DeclareLaunchArgument(
         'baud_rate',
-        default_value='115200',
+        default_value=str(default_config.get('baud_rate', 115200)),
         description='Baud rate for serial communication'
     )
     
