@@ -5,24 +5,29 @@ Robot Side Launch File for Distributed Deployment
 This launch file runs on the Raspberry Pi connected to the robotic arm.
 It includes:
 - Arm driver node (servo control)
-- Camera driver (RealSense D435i)
-- Joint state publisher
-- Robot state publisher
+- USB Camera driver (reuses camera.launch.py)
+- Robot state publisher (publishes TF transforms)
 
 Hardware Requirements:
-- Raspberry Pi 4 (4GB+ RAM recommended)
+- Raspberry Pi 3B/4 (2GB+ RAM recommended)
 - USB connection to arm servos
-- RealSense D435i camera
+- USB Camera (e.g., Logitech C270, C920)
 
 Network Requirements:
 - Both robot and PC must be on the same network
 - ROS_DOMAIN_ID must match on both sides
 - Proper DDS configuration for cross-machine communication
 
+Launch Arguments:
+- port: Serial port for arm servos (default: /dev/ttyUSB0)
+- camera_device: Camera device path (default: /dev/video0)
+- enable_camera: Enable/disable camera (default: true)
+- ros_domain_id: ROS Domain ID for network isolation (default: 0)
+
 Author: lododo
 License: Apache 2.0
 """
-
+from launch.substitutions import Command
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -41,10 +46,16 @@ def generate_launch_description():
         description="Serial port for arm servos"
     )
     
-    camera_serial_arg = DeclareLaunchArgument(
-        "camera_serial_no",
-        default_value="",
-        description="RealSense camera serial number (empty for first available)"
+    camera_type_arg = DeclareLaunchArgument(
+        "camera_type",
+        default_value="usb",
+        description="Camera type: 'usb' for USB camera, 'realsense' for RealSense D435i"
+    )
+    
+    camera_device_arg = DeclareLaunchArgument(
+        "camera_device",
+        default_value="/dev/video0",
+        description="Camera device path for USB camera"
     )
     
     enable_camera_arg = DeclareLaunchArgument(
@@ -61,26 +72,28 @@ def generate_launch_description():
     
     # Get launch configurations
     port = LaunchConfiguration("port")
-    camera_serial_no = LaunchConfiguration("camera_serial_no")
+    camera_type = LaunchConfiguration("camera_type")
+    camera_device = LaunchConfiguration("camera_device")
     enable_camera = LaunchConfiguration("enable_camera")
     
     # Get package paths
-    arm_description_share = FindPackageShare("arm_description")
+    arm_moveit_config_share = FindPackageShare("arm_moveit_config")
     
     # Robot description
     urdf_file = PathJoinSubstitution([
-        arm_description_share,
-        "urdf",
+        arm_moveit_config_share,
+        "config",
         "arm.urdf.xacro"
     ])
     
     # Robot State Publisher (publishes TF transforms)
+    robot_description_content = Command(['xacro ', urdf_file])
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         name="robot_state_publisher",
         parameters=[{
-            "robot_description": urdf_file,
+            "robot_description": robot_description_content,
             "use_sim_time": False
         }],
         output="screen"
@@ -101,26 +114,17 @@ def generate_launch_description():
         respawn_delay=2.0
     )
     
-    # RealSense Camera Launch
-    realsense_launch = IncludeLaunchDescription(
+    # Camera Launch (reuse existing camera.launch.py)
+    camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
-                FindPackageShare("realsense2_camera"),
+                FindPackageShare("arm_bringup"),
                 "launch",
-                "rs_launch.py"
+                "camera.launch.py"
             ])
         ]),
         launch_arguments={
-            "serial_no": camera_serial_no,
-            "enable_color": "true",
-            "enable_depth": "true",
-            "align_depth.enable": "true",
-            "pointcloud.enable": "true",
-            "camera_name": "camera",
-            "camera_namespace": "",
-            # Performance settings for Raspberry Pi
-            "depth_module.profile": "640x480x30",
-            "rgb_camera.profile": "640x480x30",
+            "camera_device": camera_device,
         }.items(),
         condition=IfCondition(enable_camera)
     )
@@ -136,12 +140,13 @@ def generate_launch_description():
     return LaunchDescription([
         # Launch arguments
         port_arg,
-        camera_serial_arg,
+        camera_type_arg,
+        camera_device_arg,
         enable_camera_arg,
         ros_domain_id_arg,
         
         # Nodes
         robot_state_publisher,
         arm_driver,
-        realsense_launch,
+        camera_launch,
     ])
