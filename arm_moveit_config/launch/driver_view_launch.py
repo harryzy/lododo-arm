@@ -16,12 +16,12 @@ import yaml
 
 
 def generate_launch_description():
-    # 构建MoveIt配置
+    # Build MoveIt configuration
     moveit_config = MoveItConfigsBuilder(
         "arm", package_name="arm_moveit_config"
     ).to_moveit_configs()
 
-    # 声明启动参数
+    # Declare launch arguments
     declared_arguments = []
     declared_arguments.append(
         DeclareLaunchArgument(
@@ -58,7 +58,7 @@ def generate_launch_description():
             description="Launch RViz (set to false if launching custom RViz externally)",
         )
     )
-    # 加载OMPL配置
+    # Load OMPL configuration
     ompl_planning_yaml = os.path.join(
         get_package_share_directory("arm_moveit_config"), "config", "ompl_planning.yaml"
     )
@@ -66,19 +66,19 @@ def generate_launch_description():
     with open(ompl_planning_yaml, "r") as f:
         ompl_config = yaml.safe_load(f)
 
-    # 获取启动配置
+    # Get launch configurations
     rviz_config = LaunchConfiguration("rviz_config")
     use_sim_time = LaunchConfiguration("use_sim_time")
     serial_port = LaunchConfiguration("serial_port")
     baud_rate = LaunchConfiguration("baud_rate")
     use_rviz = LaunchConfiguration("use_rviz")
 
-    # 设置全局环境变量完全抑制不必要的日志
+    # Set global environment variables to completely suppress unnecessary logs
     qt_env = SetEnvironmentVariable("QT_LOGGING_RULES", "*.debug=false;qt.qpa.*=false")
     rcutils_env = SetEnvironmentVariable("RCUTILS_LOGGING_SEVERITY_THRESHOLD", "FATAL")
     class_loader_env = SetEnvironmentVariable("CLASS_LOADER_LOG_LEVEL", "FATAL")
 
-    # 1. 启动static_transform_publisher - 发布静态变换
+    # 1. Launch static_transform_publisher - publish static transform
     static_tf = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
@@ -88,7 +88,7 @@ def generate_launch_description():
         parameters=[{"use_sim_time": use_sim_time}],
     )
 
-    # 2. 启动您的硬件驱动节点（先启动，确保joint_states话题存在）
+    # 2. Launch your hardware driver node (launch first to ensure joint_states topic exists)
     driver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [
@@ -106,7 +106,7 @@ def generate_launch_description():
         }.items(),
     )
 
-    # 延迟启动robot_state_publisher，确保驱动节点先启动
+    # Delayed launch of robot_state_publisher to ensure driver node starts first
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -116,7 +116,7 @@ def generate_launch_description():
             moveit_config.robot_description,
             {"use_sim_time": use_sim_time},
             {"publish_frequency": 20.0},
-            {"ignore_timestamp": False},  # 确保时间戳检查启用
+            {"ignore_timestamp": False},  # Ensure timestamp checking is enabled
         ],
     )
 
@@ -124,8 +124,8 @@ def generate_launch_description():
         period=3.0, actions=[robot_state_publisher]
     )
 
-    # 3. 启动move_group节点 - 完全清理版本
-    # 在move_group_node中添加规划器配置
+    # 3. Launch move_group node - fully cleaned version
+    # Add planner configuration in move_group_node
     move_group_node = Node(
         package="moveit_ros_move_group",
         executable="move_group",
@@ -141,48 +141,48 @@ def generate_launch_description():
             {
                 "use_sim_time": use_sim_time,
                 "moveit_manage_controllers": False,
-                # 发布 SRDF 语义描述到参数服务器供 RViz 使用
+                # Publish SRDF semantic description to parameter server for RViz use
                 "publish_robot_description_semantic": True,
-                # 增加轨迹执行超时时间 - 大幅放宽以适应真实硬件
-                "trajectory_execution.allowed_execution_duration_scaling": 10.0,  # 从3.0增加到10.0
-                "trajectory_execution.allowed_goal_duration_margin": 5.0,  # 从1.0增加到5.0秒
-                "trajectory_execution.allowed_start_tolerance": 0.5,  # 放宽起始容差
+                # Increase trajectory execution timeout - greatly relaxed for real hardware
+                "trajectory_execution.allowed_execution_duration_scaling": 10.0,  # Increased from 3.0 to 10.0
+                "trajectory_execution.allowed_goal_duration_margin": 5.0,  # Increased from 1.0 to 5.0 seconds
+                "trajectory_execution.allowed_start_tolerance": 0.5,  # Relaxed start tolerance
                 "trajectory_execution.execution_duration_monitoring": True,
-                "trajectory_execution.wait_for_trajectory_completion": True,  # 等待完成确认
-                # 增加步长距离 - 直接减少路点数量
-                "trajectory_execution.allowed_step_interpolation": 0.3,  # 增加步长插值
-                "trajectory.sample_duration": 0.1,  # 增大采样间隔到0.1秒，直接减少路点
-                # 轨迹简化参数
+                "trajectory_execution.wait_for_trajectory_completion": True,  # Wait for completion confirmation
+                # Increase step distance - directly reduce waypoint count
+                "trajectory_execution.allowed_step_interpolation": 0.3,  # Increase step interpolation
+                "trajectory.sample_duration": 0.1,  # Increase sampling interval to 0.1s to directly reduce waypoints
+                # Trajectory simplification parameters
                 "trajectory.simplify_solutions": True,
                 "trajectory.waypoint_reduction": True,
-                "trajectory.simplification_factor": 0.1,  # 尝试减少50%的路点
-                # 轨迹处理参数
-                "trajectory_execution.trajectory_duration": 10.0,  # 最大轨迹时间
+                "trajectory.simplification_factor": 0.1,  # Try to reduce 50% of waypoints
+                # Trajectory processing parameters
+                "trajectory_execution.trajectory_duration": 10.0,  # Maximum trajectory time
                 "trajectory_execution.trajectory_smoothing": True,
-                # 关节限制容差 - 大幅放宽
+                # Joint limit tolerance - greatly relaxed
                 "robot_description_planning.default_velocity_scaling_factor": 0.5,
                 "robot_description_planning.default_acceleration_scaling_factor": 0.5,
                 "robot_description_planning.joint_limits.default_velocity_scaling_factor": 0.5,
                 "robot_description_planning.joint_limits.default_acceleration_scaling_factor": 0.5,
-                # 笛卡尔限制
+                # Cartesian limits
                 "robot_description_planning.cartesian_limits.max_trans_vel": 1.0,
                 "robot_description_planning.cartesian_limits.max_trans_acc": 2.25,
                 "robot_description_planning.cartesian_limits.max_trans_dec": -5.0,
                 "robot_description_planning.cartesian_limits.max_rot_vel": 1.57,
-                # 强制使用OMPL规划器而不是CHOMP
+                # Force use of OMPL planner instead of CHOMP
                 "default_planning_pipeline": "ompl",
                 "planning_plugin": "ompl_interface/OMPLPlanner",
-                # OMPL规划器特定参数
+                # OMPL planner specific parameters
                 "ompl.planning.simplify_solutions": True,
-                "ompl.planning.max_waypoint_distance": 0.1,  # 增加路点间最大距离
-                "ompl.planning.longest_valid_segment_fraction": 0.1,  # 调整插值步长
-                "ompl.planning.simplification_time": 1.0,  # 增加简化时间
-                # 禁用一些可能增加路点的功能
-                "ompl.planning.interpolate": False,  # 禁用插值
-                # 添加轨迹处理参数
-                "time_parameterization.max_velocity_scaling_factor": 0.5,  # 增加
-                "time_parameterization.max_acceleration_scaling_factor": 0.5,  # 增加
-                # 状态监控配置
+                "ompl.planning.max_waypoint_distance": 0.1,  # Increase maximum waypoint distance
+                "ompl.planning.longest_valid_segment_fraction": 0.1,  # Adjust interpolation step
+                "ompl.planning.simplification_time": 1.0,  # Increase simplification time
+                # Disable some features that may increase waypoints
+                "ompl.planning.interpolate": False,  # Disable interpolation
+                # Add trajectory processing parameters
+                "time_parameterization.max_velocity_scaling_factor": 0.5,  # Increased
+                "time_parameterization.max_acceleration_scaling_factor": 0.5,  # Increased
+                # State monitoring configuration
                 "planning_scene_monitor.robot_description": "robot_description",
                 "planning_scene_monitor.joint_state_topic": "/joint_states",
                 "planning_scene_monitor.attached_collision_object_topic": "/move_group/planning_scene_monitor",
@@ -190,23 +190,23 @@ def generate_launch_description():
                 "planning_scene_monitor.publish_geometry_updates": False,
                 "planning_scene_monitor.publish_state_updates": False,
                 "planning_scene_monitor.publish_transforms_updates": False,
-                # 增加状态监控超时时间
-                "move_group.state_update_timeout": 10.0,  # 增加到10秒
-                # 禁用对象识别
+                # Increase state monitoring timeout
+                "move_group.state_update_timeout": 10.0,  # Increased to 10 seconds
+                # Disable object recognition
                 "move_group.enable_object_detection": False,
                 "publish_planning_scene": False,
                 "publish_geometry_updates": False,
                 "publish_state_updates": False,
                 "publish_transforms_updates": False,
-                # 关节限制检查配置
-                "enforce_joint_model_state_space": False,  # 放宽关节状态空间检查
+                # Joint limit checking configuration
+                "enforce_joint_model_state_space": False,  # Relax joint state space checking
             },
         ],
     )
 
     delayed_move_group = TimerAction(period=4.0, actions=[move_group_node])
 
-    # 4. 启动RViz2 - 最小化日志输出 (可选)
+    # 4. Launch RViz2 - minimize log output (optional)
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -217,23 +217,23 @@ def generate_launch_description():
             rviz_config,
             "--ros-args",
             "--log-level",
-            "FATAL",  # 只显示致命错误
+            "FATAL",  # Only show fatal errors
         ],
         parameters=[
             moveit_config.robot_description,
             moveit_config.robot_description_semantic,
             {"use_sim_time": use_sim_time},
         ],
-        condition=IfCondition(use_rviz),  # 条件启动
+        condition=IfCondition(use_rviz),  # Conditional launch
     )
 
     delayed_rviz = TimerAction(period=6.0, actions=[rviz_node])
 
-    # 组装所有节点
+    # Assemble all nodes
     nodes_to_start = [
         qt_env,
         rcutils_env,
-        class_loader_env,  # 新增：抑制class_loader警告
+        class_loader_env,  # New: Suppress class_loader warnings
         static_tf,
         driver_launch,
         delayed_robot_state_publisher,

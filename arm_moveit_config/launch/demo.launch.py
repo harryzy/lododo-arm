@@ -18,16 +18,16 @@ def generate_launch_description():
         get_package_share_directory("arm_description"), "urdf", "arm.xacro"
     )
     robot_description = ParameterValue(Command(["xacro ", urdf_file, " sim_gazebo:=false"]), value_type=str)
-    # 告诉MoveIt配置不要启动驱动节点
+    # Tell MoveIt configuration not to start the driver node
     moveit_demo = generate_demo_launch(moveit_config)
 
-    # 创建基础启动描述
+    # Create base launch description
     launch_description = LaunchDescription(
         [
-            # 声明启动参数
+            # Declare launch arguments
             DeclareLaunchArgument("use_gui", default_value="true"),
             DeclareLaunchArgument("sim_gazebo", default_value="false"),
-            # # 关节状态发布器GUI
+            # # Joint State Publisher GUI
             # Node(
             #     package="joint_state_publisher_gui",
             #     executable="joint_state_publisher_gui",
@@ -40,7 +40,7 @@ def generate_launch_description():
         ]
     )
 
-    # 将MoveIt demo的所有实体添加到我们的启动描述中
+    # Add all entities from MoveIt demo to our launch description
     for entity in moveit_demo.entities:
         launch_description.add_action(entity)
 

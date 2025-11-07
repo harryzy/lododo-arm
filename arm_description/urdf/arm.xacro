@@ -232,62 +232,62 @@
   
   <!-- ======================== CAMERA JOINT ======================== -->
   <!-- 
-    相机安装角度配置说明:
+    Camera mounting angle configuration notes=
     
-    【原始配置 - 为Gazebo仿真设计】
+    [Original Configuration - Designed for Gazebo Simulation]
     <joint name="camera_joint" type="fixed">
       <parent link="link5" />
       <child link="camera_link" />
       <origin xyz="0 0 0.05" rpy="0 ${M_PI/4} 0" />
     </joint>
     
-    问题: M_PI/4 = 45° 的俯仰角与真实硬件安装不符
-    现象: 
-      - 物体深度37cm时,计算X=17cm (实测应30-33cm)
-      - Z坐标偏差大 (计算-11cm,实测应≈0cm)
+    Issue= M_PI/4 = 45° pitch angle doesn't match real hardware installation
+    Symptoms= 
+      - Object at 37cm depth calculates X=17cm (should be 30-33cm)
+      - Large Z coordinate deviation (calculated -11cm should be ≈0cm)
     
-    【修正配置 - 匹配真实硬件】
-    根据实测数据反推:
-      - 深度37cm → X应该30-33cm
-      - 需要的角度: arccos(31/37) ≈ 33°
-      - 但需要考虑optical_frame的额外旋转
+    [Corrected Configuration - Matches Real Hardware]
+    Derived from measured data=
+      - Depth 37cm → X should be 30-33cm
+      - Required angle= arccos(31/37) ≈ 33°
+      - But need to consider optical_frame additional rotation
     
-    修正策略: 减小俯仰角从45°到30°
+    Correction strategy= Reduce pitch angle from 45° to 30°
   -->
   <joint name="camera_joint" type="fixed">
     <parent link="link5" />
     <child link="camera_link" />
-    <!-- 原始: xyz="0 0 0.05" rpy="0 ${M_PI/4} 0" (5cm高,45°仿真用) -->
-    <!-- 调优记录与结论:
-         【最终测试结果】
-         25°+5.0cm → X=29.2cm, Z=8.3cm
-         25°+1.5cm → X=28.2cm, Z=4.1cm ← 最佳Z坐标
-         23°+1.5cm → X=28.5cm, Z=5.7cm
+    <!-- Original= xyz="0 0 0.05" rpy="0 ${M_PI/4} 0" (5cm height 45° for simulation) -->
+    <!-- Tuning records and conclusions=
+         [Final Test Results]
+         25°+5.0cm → X=29.2cm Z=8.3cm
+         25°+1.5cm → X=28.2cm Z=4.1cm ← Best Z coordinate
+         23°+1.5cm → X=28.5cm Z=5.7cm
          
-         【发现】:
-         - X和Z存在矛盾,无法通过URDF同时满足X=30-33cm和Z=0-3cm
-         - 25°+1.5cm配置下Z=4.1cm是最接近目标的
-         - X=28.2cm距离目标30cm差1.8cm
+         [Finding]=
+         - X and Z conflict cannot both satisfy X=30-33cm and Z=0-3cm via URDF alone
+         - With 25°+1.5cm configuration Z=4.1cm is closest to target
+         - X=28.2cm is 1.8cm away from target 30cm
          
-         【最终方案】:
-         - URDF使用25°+1.5cm(优先保证Z坐标准确)
-         - 代码中添加X坐标补偿+2cm来修正
+         [Final Solution]=
+         - URDF uses 25°+1.5cm (prioritize Z coordinate accuracy)
+         - Add X coordinate compensation +2cm in code for correction
     -->
-    <!-- 最终配置: 25°角度 + 1.5cm高度 (25° ≈ 0.436 rad) -->
+    <!-- Final configuration= 25° angle + 1.5cm height (25° ≈ 0.436 rad) -->
     <origin xyz="0 0 0.015" rpy="0 0.436 0" />
   </joint>
   
   <link name="camera_optical_frame" />
   
   <!-- 
-    camera_optical_frame 定义:
-    标准ROS camera_optical_frame坐标系:
-      - X轴: 向右
-      - Y轴: 向下  
-      - Z轴: 向前(光轴方向)
+    camera_optical_frame definition=
+    Standard ROS camera_optical_frame coordinate system=
+      - X-axis= right
+      - Y-axis= down  
+      - Z-axis= forward (optical axis direction)
     
-    rpy="-1.570796 0 -1.570796" 即 (-90° 0° -90°)
-    这个旋转将camera_link坐标系转换为optical_frame坐标系
+    rpy="-1.570796 0 -1.570796" i.e. (-90° 0° -90°)
+    This rotation transforms camera_link coordinate system to optical_frame coordinate system
   -->
   <joint name="camera_optical_joint" type="fixed">
     <parent link="camera_link" />
@@ -470,17 +470,17 @@
   </ros2_control>
 
 
-  <!-- 修改Gazebo插件配置部分 -->
+  <!-- Modified Gazebo plugin configuration section -->
   <!-- <xacro:if value="$(arg sim_gazebo)"> -->
   <gazebo>
     <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
       <parameters>$(find arm_moveit_config)/config/ros2_controllers.yaml</parameters>
       <robot_param>robot_description</robot_param>
       <robot_param_node>robot_state_publisher</robot_param_node>
-      <!-- 添加这些参数来解决话题命名问题 -->
+      <!-- Add these parameters to resolve topic naming issues -->
       <robot_namespace></robot_namespace>
       <use_sim_time>true</use_sim_time>
-      <!-- 明确指定控制器管理器 -->
+      <!-- Explicitly specify controller manager -->
       <controller_manager_node_name>controller_manager</controller_manager_node_name>
     </plugin>
   </gazebo>

@@ -17,17 +17,17 @@ def _load_yaml(pkg, rel_path):
 
 def generate_launch_description():
 
-    # 路径设置
+    # Path setup
     pkg_name = "arm_moveit_config"
 
-    # 构建MoveIt配置
+    # Build MoveIt configuration
     moveit_config = MoveItConfigsBuilder(
         robot_name="arm", package_name=pkg_name
     ).to_moveit_configs()
 
     kin_dict = _load_yaml(pkg_name, "config/kinematics.yaml")
     ompl_dict = _load_yaml(pkg_name, "config/ompl_planning.yaml")
-    jl_dict = _load_yaml(pkg_name, "config/joint_limits.yaml")  # 新增
+    jl_dict = _load_yaml(pkg_name, "config/joint_limits.yaml")  # Load joint limits
 
     move_group_node = Node(
         package="moveit_ros_move_group",
@@ -38,7 +38,7 @@ def generate_launch_description():
             kin_dict,
             ompl_dict,
             {
-                # 启用自动参数声明（关键修复）
+                # Enable automatic parameter declaration (critical fix)
                 "automatically_declare_parameters_from_overrides": True,
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
                 "publish_robot_description_semantic": True,
@@ -49,32 +49,32 @@ def generate_launch_description():
                 "publish_state_updates": True,
                 "publish_transforms_updates": True,
                 "moveit_manage_controllers": True,
-                # 禁用需要物体识别的能力 (Pickup/Place)
+                # Disable object recognition capabilities (Pickup/Place)
                 "move_group.disable_capabilities": "move_group/MoveGroupPickupAction move_group/MoveGroupPlaceAction",
                 "trajectory_execution.allowed_execution_duration_scaling": 1.2,
                 "trajectory_execution.allowed_goal_duration_margin": 0.5,
                 "trajectory_execution.allowed_start_tolerance": 0.1,
                 "trajectory_execution.execution_duration_monitoring": False,
-                # 确保监听正确的关节状态话题
+                # Ensure listening to correct joint state topic
                 "planning_scene_monitor.joint_state_topic": "/joint_states",
-                # 关键1：明确默认管线
+                # Key 1: Explicitly set default planning pipeline
                 "planning_pipeline": "ompl",
-                # 关键2：在正确命名空间下设置适配器（双保险：两处都设）
+                # Key 2: Set adapters under correct namespace (double safety: set in both places)
                 "ompl.request_adapters": "default_planner_request_adapters/FixWorkspaceBounds "
                 "default_planner_request_adapters/FixStartStateBounds "
                 "default_planner_request_adapters/FixStartStateCollision "
                 "default_planner_request_adapters/FixStartStatePathConstraints "
                 "default_planner_request_adapters/AddTimeOptimalParameterization",
             },
-            # 关键：把 joint_limits 注入 robot_description_planning（你的 yaml 顶层是 joint_limits）
+            # Critical: Inject joint_limits into robot_description_planning (your yaml top-level is joint_limits)
             {
                 "robot_description_planning": {
                     "joint_limits": jl_dict.get("joint_limits", {})
                 }
             },
-            {"ompl.planning_time": 5.0},  # 设置OMPL规划时间
+            {"ompl.planning_time": 5.0},  # Set OMPL planning time
         ],
-        # 重要：重新映射robot_description话题
+        # Important: Remap robot_description topic
         remappings=[
             ("robot_description", "/robot_description"),
             ("robot_description_semantic", "/robot_description_semantic"),

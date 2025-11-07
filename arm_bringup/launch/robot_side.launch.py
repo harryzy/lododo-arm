@@ -3,150 +3,168 @@
 Robot Side Launch File for Distributed Deployment
 
 This launch file runs on the Raspberry Pi connected to the robotic arm.
-It includes:
-- Arm driver node (servo control)
-- USB Camera driver (reuses camera.launch.py)
-- Robot state publisher (publishes TF transforms)
+It reuses the driver_view_launch.py approach but excludes:
+- move_group (runs on PC side)
+- RViz (runs on PC side)
+
+Includes:
+- Static TF publisher (world -> base_link)
+- Arm driver node (serial communication with servos)
+- Robot state publisher (publishes URDF and TF transforms)
+- USB Camera driver (optional)
 
 Hardware Requirements:
 - Raspberry Pi 3B/4 (2GB+ RAM recommended)
-- USB connection to arm servos
-- USB Camera (e.g., Logitech C270, C920)
+- USB connection to arm servos (typically /dev/ttyUSB0 or /dev/ttyACM0)
+- USB Camera (optional, e.g., Logitech C270, C920)
 
 Network Requirements:
 - Both robot and PC must be on the same network
 - ROS_DOMAIN_ID must match on both sides
-- Proper DDS configuration for cross-machine communication
+- Configure DDS for cross-machine communication if needed
 
 Launch Arguments:
-- port: Serial port for arm servos (default: /dev/ttyUSB0)
+- serial_port: Serial port for arm servos (default: /dev/ttyUSB0)
+- baud_rate: Baud rate for serial communication (default: 115200)
+- use_camera: Enable/disable camera (default: true)
 - camera_device: Camera device path (default: /dev/video0)
-- enable_camera: Enable/disable camera (default: true)
-- ros_domain_id: ROS Domain ID for network isolation (default: 0)
 
 Author: lododo
 License: Apache 2.0
 """
-from launch.substitutions import Command
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    TimerAction,
+)
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-from launch.conditions import IfCondition
+from moveit_configs_utils import MoveItConfigsBuilder
+from ament_index_python.packages import get_package_share_directory
 import os
 
 
 def generate_launch_description():
+    # Build MoveIt configuration (reuse from driver_view_launch.py)
+    moveit_config = MoveItConfigsBuilder(
+        "arm", package_name="arm_moveit_config"
+    ).to_moveit_configs()
+
     # Declare launch arguments
-    port_arg = DeclareLaunchArgument(
-        "port",
-        default_value="/dev/ttyUSB0",
-        description="Serial port for arm servos"
+    serial_port_arg = DeclareLaunchArgument(
+        'serial_port',
+        default_value='/dev/ttyUSB0',
+        description='Serial port for robot communication'
     )
     
-    camera_type_arg = DeclareLaunchArgument(
-        "camera_type",
-        default_value="usb",
-        description="Camera type: 'usb' for USB camera, 'realsense' for RealSense D435i"
+    baud_rate_arg = DeclareLaunchArgument(
+        'baud_rate',
+        default_value='115200',
+        description='Baud rate for serial communication'
     )
     
+    use_sim_time_arg = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation time'
+    )
+    
+    use_camera_arg = DeclareLaunchArgument(
+        'use_camera',
+        default_value='true',
+        description='Launch USB camera'
+    )
+
     camera_device_arg = DeclareLaunchArgument(
-        "camera_device",
-        default_value="/dev/video0",
-        description="Camera device path for USB camera"
+        'camera_device',
+        default_value='/dev/video0',
+        description='Camera device path'
     )
-    
-    enable_camera_arg = DeclareLaunchArgument(
-        "enable_camera",
-        default_value="true",
-        description="Enable camera driver"
-    )
-    
-    ros_domain_id_arg = DeclareLaunchArgument(
-        "ros_domain_id",
-        default_value="0",
-        description="ROS_DOMAIN_ID for DDS communication (must match PC side)"
-    )
-    
+
     # Get launch configurations
-    port = LaunchConfiguration("port")
-    camera_type = LaunchConfiguration("camera_type")
-    camera_device = LaunchConfiguration("camera_device")
-    enable_camera = LaunchConfiguration("enable_camera")
+    serial_port = LaunchConfiguration('serial_port')
+    baud_rate = LaunchConfiguration('baud_rate')
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    use_camera = LaunchConfiguration('use_camera')
+    camera_device = LaunchConfiguration('camera_device')
+
+    # Package directories
+    arm_bringup_pkg = FindPackageShare('arm_bringup')
+    arm_driver_pkg = FindPackageShare('arm_driver_node')
     
-    # Get package paths
-    arm_moveit_config_share = FindPackageShare("arm_moveit_config")
-    
-    # Robot description
-    urdf_file = PathJoinSubstitution([
-        arm_moveit_config_share,
-        "config",
-        "arm.urdf.xacro"
-    ])
-    
-    # Robot State Publisher (publishes TF transforms)
-    robot_description_content = Command(['xacro ', urdf_file])
+    # 1. Static transform publisher - publishes world to base_link transform
+    # (same as driver_view_launch.py)
+    static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="static_transform_publisher",
+        output="log",
+        arguments=["0", "0", "0", "0", "0", "0", "world", "base_link"],
+        parameters=[{"use_sim_time": use_sim_time}],
+    )
+
+    # 2. Launch arm driver node (ensure joint_states topic is published)
+    # (same as driver_view_launch.py)
+    driver_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([arm_driver_pkg, 'launch', 'driver_launch.py'])
+        ]),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'serial_port': serial_port,
+            'baud_rate': baud_rate,
+        }.items(),
+    )
+
+    # 3. Delayed robot_state_publisher launch (ensure driver starts first)
+    # (same as driver_view_launch.py)
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         name="robot_state_publisher",
-        parameters=[{
-            "robot_description": robot_description_content,
-            "use_sim_time": False
-        }],
-        output="screen"
-    )
-    
-    # Arm Driver Node (hardware interface)
-    arm_driver = Node(
-        package="arm_driver_node",
-        executable="arm_driver_node",
-        name="arm_driver_node",
-        parameters=[{
-            "port": port,
-            "publish_rate": 50.0,
-            "use_sim_time": False
-        }],
         output="screen",
-        respawn=True,
-        respawn_delay=2.0
+        parameters=[
+            moveit_config.robot_description,
+            {"use_sim_time": use_sim_time},
+            {"publish_frequency": 20.0},
+            {"ignore_timestamp": False},
+        ],
     )
-    
-    # Camera Launch (reuse existing camera.launch.py)
+
+    delayed_robot_state_publisher = TimerAction(
+        period=3.0,
+        actions=[robot_state_publisher]
+    )
+
+    # 4. Launch USB camera (optional, reuse camera.launch.py)
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
-            PathJoinSubstitution([
-                FindPackageShare("arm_bringup"),
-                "launch",
-                "camera.launch.py"
-            ])
+            PathJoinSubstitution([arm_bringup_pkg, 'launch', 'camera.launch.py'])
         ]),
         launch_arguments={
-            "camera_device": camera_device,
+            'camera_device': camera_device,
+            'frame_id': 'camera_optical_frame',  # Must match URDF
         }.items(),
-        condition=IfCondition(enable_camera)
+        condition=IfCondition(use_camera)
     )
-    
-    # Joint State Publisher GUI (optional, for manual testing)
-    # Commented out by default, uncomment if needed for debugging
-    # joint_state_publisher_gui = Node(
-    #     package="joint_state_publisher_gui",
-    #     executable="joint_state_publisher_gui",
-    #     name="joint_state_publisher_gui"
-    # )
-    
+
     return LaunchDescription([
         # Launch arguments
-        port_arg,
-        camera_type_arg,
+        serial_port_arg,
+        baud_rate_arg,
+        use_sim_time_arg,
+        use_camera_arg,
         camera_device_arg,
-        enable_camera_arg,
-        ros_domain_id_arg,
         
-        # Nodes
-        robot_state_publisher,
-        arm_driver,
-        camera_launch,
+        # Nodes and launch files
+        static_tf,                      # Static TF publisher
+        driver_launch,                  # Arm driver node
+        delayed_robot_state_publisher,  # Robot state publisher (delayed)
+        camera_launch,                  # USB camera (optional)
     ])
+

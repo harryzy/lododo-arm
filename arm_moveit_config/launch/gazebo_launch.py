@@ -24,20 +24,20 @@ def generate_launch_description():
     world_file_name = "empty.world"
 
 
- # 路径设置
-    pkg_name = "arm_moveit_config"  # 改为你的包名
+ # Path setup
+    pkg_name = "arm_moveit_config"  # Change to your package name
     pkg_share = get_package_share_directory(pkg_name)
 
     kinematics_file = os.path.join(pkg_share, "config", "kinematics.yaml")
 
-    # 验证文件存在
+    # Verify file existence
     if not os.path.exists(kinematics_file):
         raise FileNotFoundError(f"kinematics.yaml not found at {kinematics_file}")
-    # 明确加载运动学配置
+    # Explicitly load kinematics configuration
     with open(kinematics_file, "r") as f:
         kinematics_config = yaml.safe_load(f)
 
-    # 1. 声明参数
+    # 1. Declare parameters
     declare_world_arg = DeclareLaunchArgument(
         name="world",
         default_value=PathJoinSubstitution(
@@ -52,22 +52,22 @@ def generate_launch_description():
         description="Launch RViz visualization",
     )
 
-    # 2. 正确的URDF加载方式 - 使用robot_state_publisher
+    # 2. Correct URDF loading method - using robot_state_publisher
     robot_description_content = Command(
         [
             FindExecutable(name="xacro"),
             " ",
             PathJoinSubstitution(
                 [
-                    FindPackageShare("arm_description"),  # 注意：使用arm_description包
+                    FindPackageShare("arm_description"),  # Note: using arm_description package
                     "urdf",
-                    robot_urdf_name,  # 注意：使用正确的文件名
+                    robot_urdf_name,  # Note: using correct filename
                 ]
             ),
         ]
     )
 
-    # 3. 启动robot_state_publisher（关键！解决Gazebo插件连接问题）
+    # 3. Launch robot_state_publisher (Critical! Solves Gazebo plugin connection issue)
     robot_state_publisher_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -77,13 +77,13 @@ def generate_launch_description():
             {"publish_frequency": 30.0},
         ],
         output="screen",
-        # 确保正确的话题映射
+        # Ensure correct topic remapping
         remappings=[
             ("robot_description", "/robot_description"),
         ],
     )
 
-    # 4. 启动Gazebo
+    # 4. Launch Gazebo
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [
@@ -98,7 +98,7 @@ def generate_launch_description():
         }.items(),
     )
 
-    # 5. 生成机器人模型到Gazebo
+    # 5. Spawn robot model into Gazebo
     spawn_robot = Node(
         package="gazebo_ros",
         executable="spawn_entity.py",
@@ -106,7 +106,7 @@ def generate_launch_description():
         output="screen",
     )
 
-    # 6.延迟启动控制器（依赖Gazebo和控制器管理器）
+    # 6. Delayed controller launch (depends on Gazebo and controller manager)
     delayed_controller_loader = TimerAction(
         period=8.0,
         actions=[
@@ -127,7 +127,7 @@ def generate_launch_description():
                     "arm_controller",
                     "--controller-manager",
                     "/controller_manager",
-                ],  # 使用正确的控制器名称
+                ],  # Use correct controller name
                 output="screen",
             ),
             Node(
@@ -142,7 +142,7 @@ def generate_launch_description():
             ),
         ],
     )
-    # 7.启动MoveIt2（禁用内置RViz）
+    # 7. Launch MoveIt2 (disable built-in RViz)
     moveit_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [
@@ -160,7 +160,7 @@ def generate_launch_description():
         }.items(),
     )
 
-    # 8. 独立RViz2（确保加载运动规划组）
+    # 8. Standalone RViz2 (ensure planning group is loaded)
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -171,7 +171,7 @@ def generate_launch_description():
                 [
                     FindPackageShare(pkg_name),
                     "config",
-                    "moveit_gazebo.rviz",  # 确认配置中已定义arm_grp规划组
+                    "moveit_gazebo.rviz",  # Confirm arm_grp planning group is defined in config
                 ]
             ),
         ],
@@ -181,24 +181,24 @@ def generate_launch_description():
             kinematics_config,
         ],
         output="screen",
-        # 确保正确的话题重映射
+        # Ensure correct topic remapping
         remappings=[
             ("display_planned_path", "/move_group/display_planned_path"),
             ("robot_description", "/robot_description"),
             ("/move_group/monitored_planning_scene", "/monitored_planning_scene"),
         ],
-        condition=IfCondition(LaunchConfiguration("use_rviz")),  # 条件启动
+        condition=IfCondition(LaunchConfiguration("use_rviz")),  # Conditional launch
     )
 
     return LaunchDescription(
         [
             declare_world_arg,
-            declare_use_rviz_arg,  # 添加use_rviz参数声明
-            robot_state_publisher_node,  # 首先启动
-            gazebo_launch,  # 然后启动Gazebo
-            TimerAction(period=3.0, actions=[spawn_robot]),  # 延迟生成机器人
-            delayed_controller_loader,  # 延迟启动控制器
-            TimerAction(period=12.0, actions=[moveit_launch]),  # 延迟启动MoveIt
+            declare_use_rviz_arg,  # Add use_rviz parameter declaration
+            robot_state_publisher_node,  # Launch first
+            gazebo_launch,  # Then launch Gazebo
+            TimerAction(period=3.0, actions=[spawn_robot]),  # Delayed robot spawn
+            delayed_controller_loader,  # Delayed controller launch
+            TimerAction(period=12.0, actions=[moveit_launch]),  # Delayed MoveIt launch
             TimerAction(period=16.0, actions=[rviz_node]),
         ]
     )
