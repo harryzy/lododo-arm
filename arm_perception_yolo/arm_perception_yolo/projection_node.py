@@ -478,19 +478,27 @@ class ProjectionNode(Node):
             # fallback to legacy absolute meters
             z_offset = getattr(self, 'grasp_z_offset', 0.02)
 
+        # Apply position correction for grasp pose (consistent with dual-view measurement)
+        grasp_x = float(hit_i[0]) + self.position_correction_x
+        grasp_y = float(hit_i[1]) + self.position_correction_y
+        grasp_z_base = float(max(self.table_h + 0.005, (self.table_h + real_h / 2.0) - z_offset))
+        grasp_z = grasp_z_base + self.position_correction_z
+
         obj = {
             "class_id": int(cls_i),
             "label": str(label_i),
             "confidence": float(conf_i),
+            # Raw position: TF transform result without correction
             "position": {"x": float(hit_i[0]), "y": float(hit_i[1]), "z": float(hit_i[2])},
             "center_px": {"u": float(u_i), "v": float(v_i)},
             "bbox_px": {"w": float(w_px_i), "h": float(h_px_i)},
             "grasp_quality": grasp_quality,
+            # Grasp pose: Corrected position for actual robot motion
             "grasp_pose": {
                 "position": {
-                    "x": float(hit_i[0]),
-                    "y": float(hit_i[1]),
-                    "z": float(max(self.table_h + 0.005, (self.table_h + real_h / 2.0) - z_offset)),
+                    "x": grasp_x,
+                    "y": grasp_y,
+                    "z": grasp_z,
                 },
                 "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
             },
@@ -609,13 +617,20 @@ class ProjectionNode(Node):
         if len(self.cache) > self.avg_window:
             self.cache.pop(0)
         center = np.mean(self.cache, axis=0)
+        
+        # Apply position correction for CollisionObject (consistent with grasp_pose)
+        center_corrected = np.array([
+            center[0] + self.position_correction_x,
+            center[1] + self.position_correction_y,
+            center[2] + self.position_correction_z
+        ])
 
         # Publish CollisionObject only in non-scan_all mode
         # scan_all mode uses site_id: front, left, right
         is_scan_all = site_id in ["front", "left", "right"]
         
         if self.publish_box and not is_scan_all:
-            self._publish_collision_object(cls_id, label_str, center, real_w, real_h)
+            self._publish_collision_object(cls_id, label_str, center_corrected, real_w, real_h)
 
         # build JSON list
         try:
@@ -626,8 +641,17 @@ class ProjectionNode(Node):
                     continue
                 arr.append(obj)
                 # Also skip CollisionObject publish in scan_all mode during iteration
+                # Use grasp_pose position (corrected) for CollisionObject
                 if self.publish_box and not is_scan_all:
-                    self._publish_collision_object(obj["class_id"], obj["label"], np.array([obj["position"]["x"], obj["position"]["y"], obj["position"]["z"]]), real_w, real_h, idx=i)
+                    grasp_pos = obj["grasp_pose"]["position"]
+                    self._publish_collision_object(
+                        obj["class_id"], 
+                        obj["label"], 
+                        np.array([grasp_pos["x"], grasp_pos["y"], grasp_pos["z"]]), 
+                        real_w, 
+                        real_h, 
+                        idx=i
+                    )
 
             if arr:
                 self._publish_detected_json(arr, site_id)
