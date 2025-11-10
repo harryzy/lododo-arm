@@ -64,6 +64,24 @@ class YoloDetectionNode(ArmGrasper):
         self._detection_request_pub.publish(msg)
         self.get_logger().info(f"📡 Detection triggered: {site_id}")
     
+    def _sleep_with_spin(self, duration: float):
+        """
+        Sleep while keeping ROS message loop active
+        
+        This ensures joint_states and other subscriptions continue to update
+        during the wait period, preventing stale state issues in MoveIt.
+        
+        Args:
+            duration: Sleep duration in seconds
+        """
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            try:
+                rclpy.spin_once(self, timeout_sec=0.05)
+            except Exception:
+                pass
+            time.sleep(0.01)
+    
     def _wait_for_joint_state(self, timeout: float = 5.0) -> bool:
         """
         Wait for joint_state available
@@ -159,7 +177,8 @@ class YoloDetectionNode(ArmGrasper):
             
             # Wait for camera to stabilize and allow user to view image in RViz
             # At 15fps: 1 second = 15 frames, ensures stable image capture and visualization
-            time.sleep(1.0)
+            # Using _sleep_with_spin to keep ROS callbacks active during wait
+            self._sleep_with_spin(1.0)
         except Exception as e:
             self.get_logger().error(f"Move to view1 failed: {e}")
             return []
@@ -196,7 +215,8 @@ class YoloDetectionNode(ArmGrasper):
                 self.arm.wait_until_executed()
                 
                 # Wait for camera to stabilize and allow user to view image in RViz
-                time.sleep(1.0)
+                # Using _sleep_with_spin to keep ROS callbacks active during wait
+                self._sleep_with_spin(1.0)
             else:
                 self.get_logger().warn("scan_pose not defined, skippingview2")
         except Exception as e:
@@ -234,7 +254,8 @@ class YoloDetectionNode(ArmGrasper):
                 self.arm.wait_until_executed()
                 
                 # Wait for camera to stabilize and allow user to view image in RViz
-                time.sleep(1.0)
+                # Using _sleep_with_spin to keep ROS callbacks active during wait
+                self._sleep_with_spin(1.0)
             else:
                 self.get_logger().warn("scan_pose not defined, skippingview3")
         except Exception as e:
