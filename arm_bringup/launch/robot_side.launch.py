@@ -165,7 +165,7 @@ def generate_launch_description():
         parameters=[
             moveit_config.robot_description,
             {"use_sim_time": use_sim_time},
-            {"publish_frequency": 20.0},
+            {"publish_frequency": 30.0},  # Increased from 20Hz for faster state updates in distributed deployment
             {"ignore_timestamp": False},
         ],
     )

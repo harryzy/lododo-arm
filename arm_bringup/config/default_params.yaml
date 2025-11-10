@@ -15,7 +15,7 @@ camera_device: "/dev/video0"
 # Resolution and framerate
 camera_width: 640            # Image width (pixels)
 camera_height: 480           # Image height (pixels)
-camera_fps: 30.0             # Framerate (Hz) - 30fps for stability
+camera_fps: 15.0             # Framerate (Hz) - 15fps for stability and network efficiency
 
 # Image quality parameters (usb_cam driver parameters)
 camera_brightness: 20        # Brightness (0-255) - Reduced to avoid reflections/overexposure
