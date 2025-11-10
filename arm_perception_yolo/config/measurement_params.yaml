@@ -62,9 +62,9 @@ triangulation_node:
     # Measured: X should be 30-33cm, URDF(25°+1.5cm high) calculates 28.2cm, needs +2cm compensation
     # Z should be 0-3cm, URDF calculates 4.1cm, within acceptable range
     # Z compensation: RViz shows 0.03 but JSON outputs -0.025, diff 5.5cm, needs +0.055m compensation
-    position_correction_x: 0.02  # X coordinate compensation +2cm (correction factor method deprecated)
+    position_correction_x: 0.00  # X coordinate compensation +2cm (correction factor method deprecated)
     position_correction_y: 0.11   # Y coordinate compensation
-    position_correction_z: 0.05   # Z coordinate compensation (to be adjusted)
+    position_correction_z: 0.07   # Z coordinate compensation (to be adjusted)
 
 # ArmCommandInterface parameters (unified configuration)
 arm_command_interface:

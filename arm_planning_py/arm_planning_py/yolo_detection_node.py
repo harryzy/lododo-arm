@@ -160,7 +160,7 @@ class YoloDetectionNode(ArmGrasper):
             # Wait for camera to stabilize and allow user to view image in RViz
             # At 15fps: 1 second = 15 frames, ensures stable image capture and visualization
             # Using _sleep_with_spin to keep ROS callbacks active during wait
-            self._sleep_with_spin(1.0)
+            self._sleep_with_spin(1.5)
         except Exception as e:
             self.get_logger().error(f"Move to view1 failed: {e}")
             return []
