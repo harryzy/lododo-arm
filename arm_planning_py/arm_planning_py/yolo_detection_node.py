@@ -157,9 +157,9 @@ class YoloDetectionNode(ArmGrasper):
             else:
                 self.move_to_named_target("front_scan")
             
-            # Wait for camera to capture new frame at current position
-            # At 15fps: 1 frame = 66ms, wait 200ms = 3 frames to ensure fresh image
-            time.sleep(0.2)
+            # Wait for camera to stabilize and allow user to view image in RViz
+            # At 15fps: 1 second = 15 frames, ensures stable image capture and visualization
+            time.sleep(1.0)
         except Exception as e:
             self.get_logger().error(f"Move to view1 failed: {e}")
             return []
@@ -195,8 +195,8 @@ class YoloDetectionNode(ArmGrasper):
                 self.arm.move_to_configuration(joint_positions=list(view2_cfg))
                 self.arm.wait_until_executed()
                 
-                # Wait for camera to capture new frame (200ms = ~3 frames @ 15fps)
-                time.sleep(0.2)
+                # Wait for camera to stabilize and allow user to view image in RViz
+                time.sleep(1.0)
             else:
                 self.get_logger().warn("scan_pose not defined, skippingview2")
         except Exception as e:
@@ -233,8 +233,8 @@ class YoloDetectionNode(ArmGrasper):
                 self.arm.move_to_configuration(joint_positions=list(view3_cfg))
                 self.arm.wait_until_executed()
                 
-                # Wait for camera to capture new frame (200ms = ~3 frames @ 15fps)
-                time.sleep(0.2)
+                # Wait for camera to stabilize and allow user to view image in RViz
+                time.sleep(1.0)
             else:
                 self.get_logger().warn("scan_pose not defined, skippingview3")
         except Exception as e:
