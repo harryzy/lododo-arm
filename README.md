@@ -21,7 +21,7 @@
 
 </div>
 
-An intelligent robotic arm system integrating computer vision, motion planning, and voice control based on ROS2 Humble. Supports distributed deployment with Raspberry Pi for hardware control and PC for planning/perception.
+An intelligent robotic arm system based on ROS2 Humble, implementing a complete ROS2 control system for the SO-101 arm ([LeRobot SO-101](https://huggingface.co/docs/lerobot/so101)) and the follower arm from the LeKiwi project ([LeRobot LeKiwi](https://huggingface.co/docs/lerobot/lekiwi)). With an ultra-low hardware cost of approximately **$110 per arm**, this system integrates computer vision, motion planning, and voice control capabilities. It supports distributed deployment with Raspberry Pi for hardware control and PC for planning/perception, making it ideal for learning ROS2, basic robotic arm control, and educational demonstrations. You can control the arm through MoveIt2 for any motion, use Python code for programmatic control, or enable automated control via computer vision with camera integration (note: some parameter adjustments may be needed based on lighting conditions and actual hardware).
 
 ## ✨ Features
 
@@ -271,6 +271,9 @@ See also the list of [contributors](https://github.com/harryzy/lododo-arm/contri
 
 ## 🙏 Acknowledgments
 
+- **[LeRobot](https://huggingface.co/docs/lerobot)** - SO-101 and LeKiwi robotic arm hardware designs from Hugging Face
+- **[SO-101](https://huggingface.co/docs/lerobot/so101)** - Low-cost 6-DOF robotic arm design
+- **[LeKiwi](https://huggingface.co/docs/lerobot/lekiwi)** - Follower arm hardware platform
 - **ROS2 & MoveIt2** - Robot Operating System and motion planning
 - **Ultralytics** - YOLOv8 object detection framework
 - **Intel RealSense** - Depth camera SDK and ROS2 wrapper
