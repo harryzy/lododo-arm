@@ -132,8 +132,8 @@ class ArmGrasper(ArmPlanningPyNode):
                 if f is not None and not f.done():
                     self.get_logger().info("Waiting for previous motion to complete...")
                     self.arm.wait_until_executed()
-                    # Additional wait to ensure state update
-                    time.sleep(0.3)
+                    # Additional wait to ensure state update - use _sleep_with_spin
+                    self._sleep_with_spin(0.3)
         except Exception:
             pass
         # Safety: stop residual motion
@@ -178,7 +178,7 @@ class ArmGrasper(ArmPlanningPyNode):
                 self.get_logger().info(
                     f"MOVE_TO_PREGRASP moved to pre-grasp position: {grasp_pose} offset: {position_offset}"
                 )
-                time.sleep(wait_time)
+                self._sleep_with_spin(wait_time)
 
                 # self.current_state = ArmState.DESCEND_AND_GRASP  # Switch to next state
                 # self.get_logger().info(f"Current state: {self.current_state.name}")
@@ -187,7 +187,7 @@ class ArmGrasper(ArmPlanningPyNode):
                 # self._execute_move(grasp_pose)  # Precisely move to grasp point TODO temporarily skip precise point
                 self._gripper_control(close=True)  # Close gripper
                 self.get_logger().info(f"DESCEND_AND_GRASP moved to grasp position: {grasp_pose}")
-                time.sleep(wait_time)
+                self._sleep_with_spin(wait_time)
                 # self.current_state = ArmState.ASCEND_WITH_OBJECT  # Switch to ascend state
                 # self.get_logger().info(f"Current state: {self.current_state.name}")
 
@@ -196,7 +196,7 @@ class ArmGrasper(ArmPlanningPyNode):
                 self.get_logger().info(
                     f"ASCEND_WITH_OBJECT moved object to ascend position: {grasp_pose} offset: {position_offset}"
                 )
-                time.sleep(wait_time)
+                self._sleep_with_spin(wait_time)
                 # self.current_state = ArmState.MOVE_TO_PLACE  # Switch to move to place state
                 # self.get_logger().info(f"Current state: {self.current_state.name}")
 
@@ -277,8 +277,8 @@ class ArmGrasper(ArmPlanningPyNode):
         )
         
         # Additional wait to ensure state is fully stable before next step
-        # Resolves "Failed to receive current joint state" warning
-        time.sleep(0.5)
+        # Resolves "Failed to receive current joint state" warning - use _sleep_with_spin
+        self._sleep_with_spin(0.5)
 
     def _gripper_control(self, close: bool):
         """Gripper control"""

@@ -64,24 +64,6 @@ class YoloDetectionNode(ArmGrasper):
         self._detection_request_pub.publish(msg)
         self.get_logger().info(f"📡 Detection triggered: {site_id}")
     
-    def _sleep_with_spin(self, duration: float):
-        """
-        Sleep while keeping ROS message loop active
-        
-        This ensures joint_states and other subscriptions continue to update
-        during the wait period, preventing stale state issues in MoveIt.
-        
-        Args:
-            duration: Sleep duration in seconds
-        """
-        start_time = time.time()
-        while time.time() - start_time < duration:
-            try:
-                rclpy.spin_once(self, timeout_sec=0.05)
-            except Exception:
-                pass
-            time.sleep(0.01)
-    
     def _wait_for_joint_state(self, timeout: float = 5.0) -> bool:
         """
         Wait for joint_state available
@@ -761,29 +743,31 @@ class YoloDetectionNode(ArmGrasper):
             # Return to home position
             self.get_logger().info("Return to home position...")
             self.go_to_home_position()
-            time.sleep(2.0)
+            # Use _sleep_with_spin to keep ROS callbacks active during wait
+            # This ensures joint_states continue updating for next move
+            self._sleep_with_spin(2.0)
             
             # Open gripper
             self._gripper_control(close=False)
-            time.sleep(1.0)
+            self._sleep_with_spin(1.0)
             
             # Move to pre-grasp position (above object)
             pre_grasp_offset = [0.0, 0.0, 0.10]
             self.get_logger().info(f"Move to pre-grasp position, offset: {pre_grasp_offset}")
             self._execute_move(grasp_pose, pre_grasp_offset)
-            time.sleep(1.5)
+            self._sleep_with_spin(1.5)
             
             # Descend to grasp position
             self.get_logger().info("Descend to grasp position...")
             grasp_offset = [0.0, 0.0, 0.05]
             self._execute_move(grasp_pose, grasp_offset)
-            time.sleep(1.0)
+            self._sleep_with_spin(1.0)
             
             # Close gripper
             self.get_logger().info("Close gripper...")
             self._gripper_control(close=True)
             self.is_grasped = True
-            time.sleep(2.0)
+            self._sleep_with_spin(2.0)
             
             # Lift object
             lift_pose = Pose()
@@ -794,7 +778,7 @@ class YoloDetectionNode(ArmGrasper):
             
             self.get_logger().info(f"Lift object to height: {lift_height}m")
             self._execute_move(lift_pose, [0.0, 0.0, 0.0])
-            time.sleep(1.5)
+            self._sleep_with_spin(1.5)
             
             self.get_logger().info("grasp and lift complete")
             return True
@@ -895,13 +879,13 @@ class YoloDetectionNode(ArmGrasper):
             # Move above hand
             self.get_logger().info("Move above hand...")
             self._execute_move(delivery_pose, [0.0, 0.0, 0.0])
-            time.sleep(2.0)
+            self._sleep_with_spin(2.0)
             
             # releaseobject
             self.get_logger().info("releaseobject...")
             self._gripper_control(close=False)
             self.is_grasped = False
-            time.sleep(2.0)
+            self._sleep_with_spin(2.0)
             
             # Slightly raise end effector
             retreat_pose = Pose()
@@ -912,12 +896,12 @@ class YoloDetectionNode(ArmGrasper):
             
             self.get_logger().info("Raise end effector...")
             self._execute_move(retreat_pose, [0.0, 0.0, 0.0])
-            time.sleep(1.0)
+            self._sleep_with_spin(1.0)
             
             # Return to home position
             self.get_logger().info("Return to home position...")
             self.go_to_home_position()
-            time.sleep(1.0)
+            self._sleep_with_spin(1.0)
             
             self.get_logger().info("Delivery to hand complete")
             return True
@@ -1029,10 +1013,10 @@ class YoloDetectionNode(ArmGrasper):
             place_pose.orientation = grasp_pose.orientation
 
         # Return to home position
-        self.get_logger().info("Return to home position...sleep 10.0")
+        self.get_logger().info("Return to home position...")
         self.go_to_home_position()
         self.current_state = ArmState.MOVE_TO_PREGRASP
-        time.sleep(5.0)
+        self._sleep_with_spin(5.0)
 
         self.move_and_grasp(
             grasp_pose=grasp_pose,

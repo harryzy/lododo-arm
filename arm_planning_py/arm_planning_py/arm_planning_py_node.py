@@ -157,6 +157,25 @@ class ArmPlanningPyNode(Node):
             except Exception:
                 pass
 
+    def _sleep_with_spin(self, duration: float):
+        """
+        Sleep while keeping ROS message loop active
+        
+        This ensures joint_states and other subscriptions continue to update
+        during the wait period, preventing stale state issues in MoveIt.
+        
+        Args:
+            duration: Sleep duration in seconds
+        """
+        import rclpy
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            try:
+                rclpy.spin_once(self, timeout_sec=0.05)
+            except Exception:
+                pass
+            time.sleep(0.01)
+
     def _ensure_start_state_current(self):
         """
         Force synchronize MoveIt internal state with actual arm state
@@ -166,8 +185,8 @@ class ArmPlanningPyNode(Node):
         """
         import time
         
-        # method1: waiting for joint_state update
-        time.sleep(0.1)  # Give joint_state_publisher time to update
+        # method1: waiting for joint_state update - use _sleep_with_spin to keep ROS active
+        self._sleep_with_spin(0.1)  # Give joint_state_publisher time to update
         
         # method2: Read latest joint_state
         js = getattr(self.arm, "joint_state", None)
