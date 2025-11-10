@@ -36,22 +36,22 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "image_width",
-            default_value="640",
+            default_value="320",
             description="Image width in pixels",
         )
     )
     declared_arguments.append(
         DeclareLaunchArgument(
             "image_height",
-            default_value="480",
+            default_value="240",
             description="Image height in pixels",
         )
     )
     declared_arguments.append(
         DeclareLaunchArgument(
             "framerate",
-            default_value="30.0",
-            description="Camera framerate (Hz) - 30 FPS for better stability",
+            default_value="15.0",
+            description="Camera framerate (Hz) - 15 FPS for better stability",
         )
     )
     
@@ -62,18 +62,10 @@ def generate_launch_description():
     image_height = LaunchConfiguration("image_height")
     framerate = LaunchConfiguration("framerate")
     
-    # usb_cam node - Camera driver supporting MJPEG format
-    # Advantage: Native MJPEG support, auto-decodes to RGB8 format
     # Note: Requires usb_cam package to be installed first
     # sudo apt install ros-humble-usb-cam
-    #
-    # Important: Use fixed values instead of LaunchConfiguration to avoid type conversion issues
-    # For VirtualBox virtual camera, 640x480@30fps is most stable
-    #
     # Camera calibration file path (file:// URL format)
     # This file contains camera intrinsic matrix for 3D projection calculations
-    import os
-    from ament_index_python.packages import get_package_share_directory
     
     camera_info_url = 'file://' + os.path.join(
         get_package_share_directory('arm_bringup'),

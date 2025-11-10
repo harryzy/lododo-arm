@@ -6,7 +6,7 @@ This is an optimized version for resource-constrained hardware.
 Reduces camera resolution and disables unnecessary features.
 
 Differences from robot_side.launch.py:
-- Lower camera resolution (640x480 -> 424x240)
+- Lower camera resolution (640x480 -> 320x240)
 - Reduced frame rate (30fps -> 15fps)
 - Minimal RealSense processing filters
 - Optimized for 1GB RAM devices
@@ -74,7 +74,7 @@ def generate_launch_description():
     
     baud_rate_arg = DeclareLaunchArgument(
         'baud_rate',
-        default_value=str(default_config.get('baud_rate', 115200)),
+        default_value=str(default_config.get('baud_rate', 1000000)),
         description='Baud rate for serial communication'
     )
     
@@ -149,7 +149,7 @@ def generate_launch_description():
 
     # 4. RealSense camera node with LITE configuration
     # Optimized for Raspberry Pi 3B+ (1GB RAM):
-    # - Reduced resolution: 424x240 depth (vs 640x480)
+    # - Reduced resolution: 320x240 depth (vs 640x480)
     # - Lower framerate: 15fps (vs 30fps)
     # - Disabled RGB camera to save bandwidth/memory
     # - Minimal processing filters
@@ -164,12 +164,12 @@ def generate_launch_description():
             'device_type': 'd435i',
             
             # LITE MODE: Reduced resolution and framerate
-            'depth_module.profile': '424x240x15',  # Low res, 15fps
+            'depth_module.profile': '320x240x15',  # Low res, 15fps
             'enable_depth': True,
             
             # Disable RGB to save memory and USB bandwidth
             'enable_color': False,
-            'rgb_camera.profile': '424x240x15',
+            'rgb_camera.profile': '320x240x15',
             
             # Disable extra sensors
             'enable_infra1': False,
