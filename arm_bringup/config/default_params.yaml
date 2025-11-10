@@ -1,4 +1,5 @@
 # Default configuration for arm_bringup package
+# Single Source of Truth for all camera and robot parameters
 # These values can be overridden by launch arguments
 #
 
@@ -7,11 +8,31 @@ serial_port: "/dev/ttyACM0"  # ✅ Used by: minimal_bringup, real_bringup, voice
 baud_rate: 1000000           # ✅ Used by: minimal_bringup, real_bringup, voice_headless
                              # Note: 1Mbps is Feetech servo default baud rate
 
-# ===== Camera Configuration ===== ✅ USED
-camera_device: "/dev/video0" # ✅ Used by: real_bringup
-camera_width: 640            # ✅ Used by: real_bringup
-camera_height: 480           # ✅ Used by: real_bringup
-camera_fps: 15.0             # ✅ Used by: real_bringup
+# ===== Camera Configuration ===== ✅ USED (Unified)
+# All camera parameters in one place - used by camera.launch.py, robot_side.launch.py, real_bringup.launch.py
+camera_device: "/dev/video0"
+
+# Resolution and framerate
+camera_width: 640            # Image width (pixels)
+camera_height: 480           # Image height (pixels)
+camera_fps: 15.0             # Framerate (Hz) - 15fps for stability
+
+# Image quality parameters (usb_cam driver parameters)
+camera_brightness: 20        # Brightness (0-255) - Reduced to avoid reflections/overexposure
+camera_contrast: 50          # Contrast (0-255) - Enhanced for better edge detection
+camera_saturation: 60        # Saturation (0-255)
+camera_sharpness: 6          # Sharpness (0-255) - Enhanced for object contours
+camera_auto_exposure: 1      # Auto exposure: 1=Manual (recommended), 3=Auto
+camera_exposure: 30          # Exposure value (1-5000) - Reduced to eliminate reflections
+camera_auto_white_balance: true   # Auto white balance
+camera_white_balance: 4000   # White balance temperature (only when auto=false)
+
+# Camera intrinsic parameters (calibrated for 640×480 resolution)
+# These will be automatically scaled by camera.launch.py based on actual resolution
+camera_fx: 1128.1            # Focal length X (pixels) - calibrated from actual measurement
+camera_fy: 1128.1            # Focal length Y (pixels)
+camera_cx: 320.0             # Principal point X (pixels) - image center
+camera_cy: 240.0             # Principal point Y (pixels) - image center
 
 # ===== Logging ===== ✅ USED
 default_log_level: "info"    # ✅ Used by: sim_bringup, real_bringup
