@@ -191,10 +191,10 @@ The custom RViz plugin provides buttons for:
 
 ### Voice Commands
 With voice control enabled:
-- "扫描正面" (Scan front)
-- "扫描全部" (Scan all)
-- "抓取提升" (Grasp and lift)
-- "放到姿态" (Deliver to pose)
+- "扫描前面" (Scan front)
+- "扫描" (Scan all)
+- "抓起" (Grasp and lift)
+- "递送" (Deliver to pose)
 
 ### Command Line
 ```bash
