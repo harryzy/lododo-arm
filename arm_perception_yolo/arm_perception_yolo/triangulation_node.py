@@ -1443,8 +1443,9 @@ class TriangulationNode(Node):
                 f"      base_link coordinates (after compensation): X={position_base_corrected[0]*100:.1f}cm, Y={position_base_corrected[1]*100:.1f}cm, Z={position_base_corrected[2]*100:.1f}cm"
             )
             
-            # Use compensated coordinates
-            position_base = position_base_corrected
+            # ⚠️ Important: Keep original position_base unchanged for raw measurement data
+            # position_base_corrected will be used for grasp_pose in projection_node
+            # This allows comparing raw vs corrected values
             
             # No longer use fixed correction factor, as it depends on object distance
             # TODO: Need to correct camera_joint angle definition in URDF

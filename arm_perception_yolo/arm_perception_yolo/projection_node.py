@@ -701,24 +701,29 @@ class ProjectionNode(Node):
         # Convert all MeasuredObject to JSON objects
         arr = []
         for msg in self.measured_batch:
-            # Use Z coordinate calculation consistent with CollisionObject
-            # CollisionObject: z = table_h + height/2
-            real_h = float(msg.dimensions.z)
-            position_z = self.table_h + real_h / 2.0
+            # Raw position from triangulation (TF transform only, no position_correction applied)
+            raw_x = float(msg.position.x)
+            raw_y = float(msg.position.y)
+            raw_z = float(msg.position.z)
             
-            # Apply position correction parameters (consistent with triangulation_node)
-            corrected_x = float(msg.position.x) + self.position_correction_x
-            corrected_y = float(msg.position.y) + self.position_correction_y
-            corrected_z = position_z + self.position_correction_z
+            # Apply position correction for actual grasp pose
+            # This is where we compensate for URDF vs actual hardware mounting differences
+            grasp_x = raw_x + self.position_correction_x
+            grasp_y = raw_y + self.position_correction_y
+            grasp_z = raw_z + self.position_correction_z
+            
+            # Get dimensions for reference
+            real_h = float(msg.dimensions.z)
             
             obj = {
                 "class_id": int(msg.class_id),
                 "label": str(msg.class_name),
                 "confidence": float(msg.confidence),
+                # Raw position: TF transform result without correction
                 "position": {
-                    "x": corrected_x,
-                    "y": corrected_y,
-                    "z": corrected_z
+                    "x": raw_x,
+                    "y": raw_y,
+                    "z": raw_z
                 },
                 "dimensions": {
                     "width": float(msg.dimensions.x),
@@ -732,19 +737,20 @@ class ProjectionNode(Node):
                 "matching_score": float(msg.matching_score),
                 "disparity": float(msg.disparity),
                 "grasp_quality": float(msg.confidence),
+                # Grasp pose: Corrected position for actual robot motion
                 "grasp_pose": {
                     "position": {
-                        "x": corrected_x,
-                        "y": corrected_y,
-                        "z": corrected_z,  # Use object center height, consistent with position
+                        "x": grasp_x,
+                        "y": grasp_y,
+                        "z": grasp_z,
                     },
                     "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
                 },
             }
             arr.append(obj)
             
-            # Publish CollisionObject (apply position compensation)
-            center = np.array([corrected_x, corrected_y, corrected_z])
+            # Publish CollisionObject (use corrected grasp position)
+            center = np.array([grasp_x, grasp_y, grasp_z])
             self._publish_collision_object(
                 msg.class_id,
                 msg.class_name,
