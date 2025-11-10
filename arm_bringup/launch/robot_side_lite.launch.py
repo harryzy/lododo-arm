@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Lightweight Robot Side Launch File for Raspberry Pi 3B+ (1GB RAM)
+Lightweight Robot Side Launch File for Raspberry Pi 3B (1GB RAM)
 
 This is an optimized version for resource-constrained hardware.
-Reduces camera resolution and disables unnecessary features.
+Reduces camera resolution and frame rate for better performance.
 
 Differences from robot_side.launch.py:
 - Lower camera resolution (640x480 -> 320x240)
-- Reduced frame rate (30fps -> 15fps)
-- Minimal RealSense processing filters
+- Reduced frame rate (15fps -> 10fps)
+- Lower robot_state_publisher frequency (30Hz -> 20Hz)
 - Optimized for 1GB RAM devices
 
 Launch on Raspberry Pi:
@@ -16,9 +16,9 @@ Launch on Raspberry Pi:
 
 Launch Arguments:
     serial_port: Serial port for arm servos (default: from config file or /dev/ttyACM0)
-    baud_rate: Baud rate for serial communication (default: from config file or 115200)
-    use_camera: Enable/disable RealSense camera (default: true)
-    camera_serial_no: Camera serial number (default: auto-detect)
+    baud_rate: Baud rate for serial communication (default: from config file or 1000000)
+    use_camera: Enable/disable USB camera (default: true)
+    camera_device: Camera device path (default: /dev/video0)
 
 Author: lododo
 License: Apache 2.0
@@ -57,7 +57,7 @@ def load_yaml_config(package_name, config_file):
 
 
 def generate_launch_description():
-    # Build MoveIt configuration (same as robot_side.launch.py)
+    # Build MoveIt configuration
     moveit_config = MoveItConfigsBuilder(
         "arm", package_name="arm_moveit_config"
     ).to_moveit_configs()
@@ -87,13 +87,13 @@ def generate_launch_description():
     use_camera_arg = DeclareLaunchArgument(
         'use_camera',
         default_value='true',
-        description='Enable RealSense camera node'
+        description='Launch USB camera'
     )
-    
-    camera_serial_no_arg = DeclareLaunchArgument(
-        'camera_serial_no',
-        default_value='',
-        description='RealSense camera serial number (empty for auto-detect)'
+
+    camera_device_arg = DeclareLaunchArgument(
+        'camera_device',
+        default_value='/dev/video0',
+        description='Camera device path'
     )
 
     # Get launch configurations
@@ -101,9 +101,10 @@ def generate_launch_description():
     baud_rate = LaunchConfiguration('baud_rate')
     use_sim_time = LaunchConfiguration('use_sim_time')
     use_camera = LaunchConfiguration('use_camera')
-    camera_serial_no = LaunchConfiguration('camera_serial_no')
+    camera_device = LaunchConfiguration('camera_device')
 
     # Package directories
+    arm_bringup_pkg = FindPackageShare('arm_bringup')
     arm_driver_pkg = FindPackageShare('arm_driver_node')
     
     # 1. Static transform publisher - publishes world to base_link transform
@@ -116,7 +117,7 @@ def generate_launch_description():
         parameters=[{"use_sim_time": use_sim_time}],
     )
 
-    # 2. Launch arm driver node
+    # 2. Launch arm driver node (ensure joint_states topic is published)
     driver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([arm_driver_pkg, 'launch', 'driver_launch.py'])
@@ -128,7 +129,8 @@ def generate_launch_description():
         }.items(),
     )
 
-    # 3. Delayed robot_state_publisher launch
+    # 3. Delayed robot_state_publisher launch (ensure driver starts first)
+    # LITE: Reduced frequency to 20Hz (vs 30Hz) to save CPU on Pi 3B
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -137,7 +139,7 @@ def generate_launch_description():
         parameters=[
             moveit_config.robot_description,
             {"use_sim_time": use_sim_time},
-            {"publish_frequency": 15.0},  # Reduced from 20Hz to save CPU on Pi 3B
+            {"publish_frequency": 20.0},  # Reduced from 30Hz to save CPU on Pi 3B
             {"ignore_timestamp": False},
         ],
     )
@@ -147,49 +149,22 @@ def generate_launch_description():
         actions=[robot_state_publisher]
     )
 
-    # 4. RealSense camera node with LITE configuration
-    # Optimized for Raspberry Pi 3B+ (1GB RAM):
-    # - Reduced resolution: 320x240 depth (vs 640x480)
-    # - Lower framerate: 15fps (vs 30fps)
-    # - Disabled RGB camera to save bandwidth/memory
-    # - Minimal processing filters
-    realsense_node = Node(
-        package='realsense2_camera',
-        executable='realsense2_camera_node',
-        name='realsense2_camera',
-        output='screen',
-        parameters=[{
-            'serial_no': camera_serial_no,
-            'camera_name': 'camera',
-            'device_type': 'd435i',
-            
-            # LITE MODE: Reduced resolution and framerate
-            'depth_module.profile': '320x240x15',  # Low res, 15fps
-            'enable_depth': True,
-            
-            # Disable RGB to save memory and USB bandwidth
-            'enable_color': False,
-            'rgb_camera.profile': '320x240x15',
-            
-            # Disable extra sensors
-            'enable_infra1': False,
-            'enable_infra2': False,
-            'enable_gyro': False,
-            'enable_accel': False,
-            
-            # Depth processing (keep minimal for grasp planning)
-            'pointcloud.enable': True,
-            'align_depth.enable': False,  # Disabled (no RGB)
-            'decimation_filter.enable': True,
-            'spatial_filter.enable': True,
-            'temporal_filter.enable': False,  # Disabled to save CPU
-            'hole_filling_filter.enable': False,  # Disabled to save CPU
-            
-            # TF frames
-            'base_frame_id': 'camera_link',
-            'depth_frame_id': 'camera_depth_frame',
-            'color_frame_id': 'camera_color_frame',
-        }],
+    # 4. Launch USB camera with LITE configuration
+    # Optimized for Raspberry Pi 3B (1GB RAM):
+    # - Reduced resolution: 320x240 (vs 640x480)
+    # - Lower framerate: 10fps (vs 15fps)
+    # - Saves CPU, memory, and USB bandwidth
+    camera_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([arm_bringup_pkg, 'launch', 'camera.launch.py'])
+        ]),
+        launch_arguments={
+            'camera_device': camera_device,
+            'frame_id': 'camera_optical_frame',
+            'image_width': '320',      # LITE: Reduced from 640
+            'image_height': '240',     # LITE: Reduced from 480
+            'framerate': '10',         # LITE: Reduced from 15
+        }.items(),
         condition=IfCondition(use_camera)
     )
 
@@ -199,12 +174,12 @@ def generate_launch_description():
         baud_rate_arg,
         use_sim_time_arg,
         use_camera_arg,
-        camera_serial_no_arg,
+        camera_device_arg,
         
         # Nodes and launch files
         static_tf,                      # Static TF publisher
         driver_launch,                  # Arm driver node
-        delayed_robot_state_publisher,  # Robot state publisher (delayed)
-        realsense_node,                 # RealSense camera (LITE mode, optional)
+        delayed_robot_state_publisher,  # Robot state publisher (delayed, 20Hz)
+        camera_launch,                  # USB camera (LITE mode: 320x240@10fps)
     ])
 

@@ -28,7 +28,7 @@ An intelligent robotic arm system based on ROS2 Humble, implementing a complete 
 ### 🤖 Hardware Control
 - **6-DOF Robotic Arm** - Full motion control using Feetech ST3215 servos
 - **Gripper Control** - Precision grasping with rotation support
-- **RealSense D435i** - Depth camera for 3D perception
+- **USB Camera** - Computer vision for object detection and tracking
 - **Distributed Deployment** - Raspberry Pi + PC architecture
 
 ### 🎯 Motion Planning
@@ -61,7 +61,7 @@ An intelligent robotic arm system based on ROS2 Humble, implementing a complete 
 │  ───────────────────────────────  │         │  ────────────────────────────────  │
 │  • arm_driver_node              │         │  • move_group (MoveIt2)          │
 │  • robot_state_publisher        │ <──DDS──> │  • arm_planning_py_node          │
-│  • realsense2_camera            │  Network  │  • yolo_perception_node          │
+│  • usb_cam                      │  Network  │  • yolo_perception_node          │
 │  • joint_state_publisher        │         │  • rviz2                         │
 │                                 │         │  • arm_voice_node (optional)     │
 └─────────────────────────────────┘         └──────────────────────────────────┘
@@ -87,7 +87,7 @@ An intelligent robotic arm system based on ROS2 Humble, implementing a complete 
 
 **Minimum Configuration:**
 - 6-DOF robotic arm with Feetech ST3215 servos
-- Intel RealSense D435i depth camera (or compatible USB camera)
+- USB camera (standard webcam, 640×480 or higher resolution)
 - Ubuntu 22.04 LTS
 - 8GB RAM, 4-core CPU
 
@@ -276,7 +276,7 @@ See also the list of [contributors](https://github.com/harryzy/lododo-arm/contri
 - **[LeKiwi](https://huggingface.co/docs/lerobot/lekiwi)** - Follower arm hardware platform
 - **ROS2 & MoveIt2** - Robot Operating System and motion planning
 - **Ultralytics** - YOLOv8 object detection framework
-- **Intel RealSense** - Depth camera SDK and ROS2 wrapper
+- **usb_cam** - USB camera ROS2 driver for computer vision
 - **Vosk** - Offline speech recognition
 - **Feetech** - Servo motor SDK
 - **Open Robotics** - ROS2 ecosystem and tools
