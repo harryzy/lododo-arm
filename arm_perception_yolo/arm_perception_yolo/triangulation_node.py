@@ -54,7 +54,8 @@ class TriangulationNode(Node):
         
         # Declare parameters
         self.declare_parameter('baseline', 0.20)  # joint1 rotation angle parameter
-        self.declare_parameter('camera_radius', 0.33)  # Distance from camera to joint1 axis (meters)
+        self.declare_parameter('camera_radius', 0.33)  # Distance from camera to joint1 axis (meters) - for baseline calculation
+        self.declare_parameter('y_compensation_factor', 0.74)  # Y compensation coefficient (effective_radius / camera_radius) - calibrated once
         self.declare_parameter('depth_calibration_factor', 1.0)  # Depth calibration factor (actual depth / calculated depth)
         self.declare_parameter('min_disparity', 10.0)  # Minimum 10 pixel disparity
         self.declare_parameter('max_depth', 1.0)  # Maximum 1 meter
@@ -97,6 +98,7 @@ class TriangulationNode(Node):
         # Read parameters
         baseline_param = self.get_parameter('baseline').value
         camera_radius = self.get_parameter('camera_radius').value
+        y_compensation_factor = self.get_parameter('y_compensation_factor').value
         self.depth_calibration_factor = self.get_parameter('depth_calibration_factor').value
         self.min_disparity = self.get_parameter('min_disparity').value
         self.max_depth = self.get_parameter('max_depth').value
@@ -109,6 +111,9 @@ class TriangulationNode(Node):
         self.declare_parameter('same_class_score_threshold', 0.40)
         self.class_mismatch_score_threshold = self.get_parameter('class_mismatch_score_threshold').value
         self.same_class_score_threshold = self.get_parameter('same_class_score_threshold').value
+        
+        # Note: Confidence filtering is already done in yolo_detector.py (min_conf_triggered=0.20)
+        # No need to filter again here - all received detections are already above threshold
         
         # Position correction parameters (compensate for URDF vs actual camera mounting offset)
         # URDF (25°+1.5cm) calculation: X≈28.2cm, Z≈4.1cm
@@ -147,7 +152,8 @@ class TriangulationNode(Node):
         angle_deg = baseline_param * 100  # 0.15 → 15°
         angle_rad = math.radians(angle_deg)
         
-        self.camera_radius = camera_radius  # Save camera radius
+        self.camera_radius = camera_radius  # Save camera radius (for baseline calculation)
+        self.y_compensation_radius = camera_radius * y_compensation_factor  # Auto-calculate Y compensation radius
         self.rotation_angle = angle_rad      # Save rotation angle (radians)
         self.rotation_angle_deg = angle_deg  # Save rotation angle (degrees)
         
@@ -157,7 +163,9 @@ class TriangulationNode(Node):
         self.get_logger().info(
             f"📐 Rotating stereo vision parameters:\n"
             f"   Rotation angle = {angle_deg:.1f}°\n"
-            f"   Camera radius = {camera_radius:.3f}m\n"
+            f"   Camera radius = {camera_radius:.3f}m (physical measurement)\n"
+            f"   Y compensation factor = {y_compensation_factor:.3f} (calibrated)\n"
+            f"   Y compensation radius = {self.y_compensation_radius:.3f}m (auto-calculated)\n"
             f"   Effective baseline = {self.baseline:.3f}m (for error estimation only)\n"
             f"   Depth calibration factor = {self.depth_calibration_factor:.3f} "
             f"{'(calibrated)' if self.depth_calibration_factor != 1.0 else '(uncalibrated)'}"
@@ -187,6 +195,10 @@ class TriangulationNode(Node):
         
         # Store latest joint states (for precise object position calculation)
         self.latest_joint_states = None
+        
+        # Current view pair being triangulated (for pose-dependent compensation)
+        # Format: ("view1", "view2") or ("view2", "view3") etc.
+        self.current_view_pair = None
         
         # QoS configuration
         qos_profile = QoSProfile(
@@ -233,6 +245,7 @@ class TriangulationNode(Node):
             f"   Depth range: {self.min_depth}-{self.max_depth}m\n"
             f"   IoU threshold: {self.iou_threshold}\n"
             f"   Matching threshold: same class≥{self.same_class_score_threshold:.2f}, different class≥{self.class_mismatch_score_threshold:.2f}\n"
+            f"   Confidence filtering: ✅ Done in yolo_detector (min_conf_triggered=0.20)\n"
             f"   Triangulation: {'✅ Enabled' if self.enable_triangulation else '❌ Disabled'}\n"
             f"   Thickness estimation strategy: default={self.thickness_ratio_default:.2f}, "
             f"{len(self.thickness_ratio_by_class)} class-specific configs\n"
@@ -463,101 +476,8 @@ class TriangulationNode(Node):
                             f"      Selected: {best_view_pair} (error={best_obj.depth_error*1000:.2f}mm)"
                         )
                 
-                # Cube filtering mode
-                if self.detect_cube_only and len(final_measured) > 0:
-                    self.get_logger().info(f"   🎲 Cube detection mode: filtering most cube-like objects...")
-                    
-                    # Calculate cube similarity for each object and filter invalid ones
-                    cube_candidates = []
-                    for obj in final_measured:
-                        is_cube, cube_score = self.is_cube_like(obj)
-                        
-                        # Check if edge length is within reasonable range
-                        dims = [obj.dimensions.x, obj.dimensions.y, obj.dimensions.z]
-                        avg_edge = sum(dims) / 3.0
-                        edge_in_range = (self.cube_min_edge_length <= avg_edge <= self.cube_max_edge_length)
-                        
-                        # Check if position is within arm workspace
-                        position_valid = (obj.position.x <= self.cube_max_x_position)
-                        
-                        # Output detailed info
-                        self.get_logger().info(
-                            f"      • {obj.class_name}: cube score={cube_score:.3f} "
-                            f"({'✅cube' if is_cube else '❌not cube'})\n"
-                            f"        Average edge={avg_edge*100:.1f}cm "
-                            f"({'✅' if edge_in_range else '❌'}range {self.cube_min_edge_length*100:.1f}-{self.cube_max_edge_length*100:.1f}cm)\n"
-                            f"        Position X={obj.position.x:.3f}m "
-                            f"({'✅' if position_valid else '❌'}≤{self.cube_max_x_position:.2f}m)"
-                        )
-                        
-                        # Intelligent filtering strategy:
-                        # 1. Edge length and position are hard requirements (must satisfy)
-                        # 2. Cube similarity is a soft requirement:
-                        #    - If multiple candidates, only keep is_cube=True
-                        #    - If only 1 candidate, keep even if is_cube=False (avoid false negatives)
-                        if edge_in_range and position_valid:
-                            # Passed hard requirements, add to candidates
-                            cube_candidates.append((obj, cube_score, is_cube))
-                            if is_cube:
-                                self.get_logger().info(
-                                    f"        ✅ Passed all filtering conditions, added to candidate list"
-                                )
-                            else:
-                                self.get_logger().info(
-                                    f"        ⚠️  Passed hard requirements (edge+position), added to candidate list (low cube score)"
-                                )
-                        else:
-                            reasons = []
-                            if not edge_in_range:
-                                reasons.append(f"edge out of range({avg_edge*100:.1f}cm)")
-                            if not position_valid:
-                                reasons.append(f"position out of range(X={obj.position.x:.3f}m)")
-                            self.get_logger().info(
-                                f"        ❌ Filtered: {', '.join(reasons)}"
-                            )
-                    
-                    # Select best candidate
-                    if cube_candidates:
-                        # If multiple candidates, prefer is_cube=True
-                        true_cubes = [c for c in cube_candidates if c[2]]  # c[2] is is_cube
-                        
-                        if true_cubes:
-                            # Have true cubes, select highest score
-                            best_cube = max(true_cubes, key=lambda x: x[1])
-                            best_obj, best_score, is_best_cube = best_cube
-                            self.get_logger().info(
-                                f"   🎯 Selected best cube candidate: {best_obj.class_name}\n"
-                                f"      Score={best_score:.3f} (is_cube=True)\n"
-                                f"      Dimensions=[{best_obj.dimensions.x*100:.1f}, "
-                                f"{best_obj.dimensions.y*100:.1f}, {best_obj.dimensions.z*100:.1f}]cm\n"
-                                f"      Position=[{best_obj.position.x:.3f}, "
-                                f"{best_obj.position.y:.3f}, {best_obj.position.z:.3f}]m"
-                            )
-                        else:
-                            # No true cubes, but have candidates (edge length and position OK)
-                            # Select highest scoring candidate
-                            best_cube = max(cube_candidates, key=lambda x: x[1])
-                            best_obj, best_score, is_best_cube = best_cube
-                            self.get_logger().info(
-                                f"   🎯 Selected best candidate (low cube score, but dimensions/position suitable): {best_obj.class_name}\n"
-                                f"      Score={best_score:.3f} (is_cube=False)\n"
-                                f"      Dimensions=[{best_obj.dimensions.x*100:.1f}, "
-                                f"{best_obj.dimensions.y*100:.1f}, {best_obj.dimensions.z*100:.1f}]cm\n"
-                                f"      Position=[{best_obj.position.x:.3f}, "
-                                f"{best_obj.position.y:.3f}, {best_obj.position.z:.3f}]m\n"
-                                f"      ⚠️  Note: Object may not be standard cube, please verify grasp effect"
-                            )
-                        
-                        # Keep only highest scoring object
-                        final_measured = [best_obj]
-                    else:
-                        self.get_logger().warn(
-                            f"   ⚠️  No cube candidates found meeting requirements\n"
-                            f"      Requirements: edge length {self.cube_min_edge_length*100:.1f}-{self.cube_max_edge_length*100:.1f}cm, "
-                            f"position X≤{self.cube_max_x_position:.2f}m"
-                        )
-                        # Clear list, don't publish any results
-                        final_measured = []
+                # Apply unified cube filtering
+                final_measured = self.filter_cube_candidates(final_measured)
                 
                 # Batch publish
                 for obj in final_measured:
@@ -676,6 +596,9 @@ class TriangulationNode(Node):
         """
         measured_objects = []
         
+        # Set current view pair for pose-dependent compensation
+        self.current_view_pair = (view1_name, view2_name)
+        
         # Match and measure each detection in view1
         for det1 in det1_array.detections:
             # Find matching object in view2
@@ -689,6 +612,9 @@ class TriangulationNode(Node):
             
             if measured_obj is not None:
                 measured_objects.append(measured_obj)
+        
+        # Clear view pair after triangulation
+        self.current_view_pair = None
         
         return measured_objects
     
@@ -715,10 +641,14 @@ class TriangulationNode(Node):
         self.view1_detections = det1_array
         self.view2_detections = det2_array
         
+        # Set current view pair for pose-dependent compensation
+        self.current_view_pair = (view1_name, view2_name)
+        
         # Call existing triangulation logic
         self.perform_triangulation()
         
-        # Restore original values (will be reset soon anyway)
+        # Clear view pair and restore original values
+        self.current_view_pair = None
         self.view1_detections = original_view1
         self.view2_detections = original_view2
     
@@ -726,6 +656,10 @@ class TriangulationNode(Node):
         """Execute triangulation"""
         if self.view1_detections is None or self.view2_detections is None:
             return
+        
+        # If current_view_pair not set, assume it's view1+view2 (original behavior)
+        if self.current_view_pair is None:
+            self.current_view_pair = ("view1", "view2")
         
         self.get_logger().info(
             f"\n{'='*60}\n"
@@ -738,10 +672,27 @@ class TriangulationNode(Node):
         measured_count = 0
         measured_objects = []  # Collect all measurement results
         
-        # Match and measure each detection in view1
-        for det1 in self.view1_detections.detections:
-            # Find matching object in view2
-            det2 = self.find_matching_object(det1, self.view2_detections.detections)
+        # yolo_detector.py already filtered detections by confidence (min_conf_triggered=0.20)
+        # Use all received detections directly
+        view1_filtered = list(self.view1_detections.detections)
+        view2_filtered = list(self.view2_detections.detections)
+        
+        if not view1_filtered or not view2_filtered:
+            self.get_logger().warn(
+                f"   ⚠️  Insufficient detections for triangulation: "
+                f"view1={len(view1_filtered)}, view2={len(view2_filtered)}"
+            )
+            return
+        
+        self.get_logger().info(
+            f"   ✅ Using all received detections (already filtered by yolo_detector): "
+            f"view1={len(view1_filtered)}, view2={len(view2_filtered)}"
+        )
+        
+        # Match and measure each detection in view1 (using filtered list)
+        for det1 in view1_filtered:
+            # Find matching object in view2 (from filtered list)
+            det2 = self.find_matching_object(det1, view2_filtered)
             
             if det2 is None:
                 self.get_logger().debug(
@@ -778,14 +729,17 @@ class TriangulationNode(Node):
                     f"size±{measured_obj.size_error*1000:.1f}mm"
                 )
         
-        # Batch publish all measurement results
+        # Apply unified cube filtering
+        measured_objects = self.filter_cube_candidates(measured_objects)
+        
+        # Publish filtered results
         for obj in measured_objects:
             self.pub_measured.publish(obj)
         
         self.get_logger().info(
             f"{'='*60}\n"
-            f"🎯 Triangulation complete: {measured_count}/{len(self.view1_detections.detections)} objects\n"
-            f"   Batch published {len(measured_objects)} measurement results\n"
+            f"🎯 Triangulation complete: {measured_count}/{len(self.view1_detections.detections)} objects measured\n"
+            f"   Published {len(measured_objects)} objects (after filtering)\n"
             f"{'='*60}\n"
         )
     
@@ -892,6 +846,116 @@ class TriangulationNode(Node):
             )
         
         return best_match
+    
+    def filter_cube_candidates(self, measured_objects: List[MeasuredObject]) -> List[MeasuredObject]:
+        """
+        Unified cube filtering logic - applies cube detection criteria to measured objects
+        
+        Filtering strategy:
+        1. Calculate cube similarity score for each object
+        2. Apply hard requirements: edge length range and position within workspace
+        3. Select best candidate based on cube score
+        
+        Args:
+            measured_objects: List of measured objects to filter
+            
+        Returns:
+            Filtered list (empty if no candidates, or single best candidate)
+        """
+        if not self.detect_cube_only or len(measured_objects) == 0:
+            return measured_objects
+        
+        self.get_logger().info(f"   🎲 Cube detection mode: filtering {len(measured_objects)} objects...")
+        
+        # Calculate cube similarity for each object and filter invalid ones
+        cube_candidates = []
+        for obj in measured_objects:
+            is_cube, cube_score = self.is_cube_like(obj)
+            
+            # Check if edge length is within reasonable range
+            dims = [obj.dimensions.x, obj.dimensions.y, obj.dimensions.z]
+            avg_edge = sum(dims) / 3.0
+            edge_in_range = (self.cube_min_edge_length <= avg_edge <= self.cube_max_edge_length)
+            
+            # Check if position is within arm workspace
+            position_valid = (obj.position.x <= self.cube_max_x_position)
+            
+            # Output detailed info
+            self.get_logger().info(
+                f"      • {obj.class_name}: cube score={cube_score:.3f} "
+                f"({'✅cube' if is_cube else '❌not cube'})\n"
+                f"        Average edge={avg_edge*100:.1f}cm "
+                f"({'✅' if edge_in_range else '❌'}range {self.cube_min_edge_length*100:.1f}-{self.cube_max_edge_length*100:.1f}cm)\n"
+                f"        Position X={obj.position.x:.3f}m "
+                f"({'✅' if position_valid else '❌'}≤{self.cube_max_x_position:.2f}m)"
+            )
+            
+            # Intelligent filtering strategy:
+            # 1. Edge length and position are hard requirements (must satisfy)
+            # 2. Cube similarity is a soft requirement
+            if edge_in_range and position_valid:
+                # Passed hard requirements, add to candidates
+                cube_candidates.append((obj, cube_score, is_cube))
+                if is_cube:
+                    self.get_logger().info(
+                        f"        ✅ Passed all filtering conditions, added to candidate list"
+                    )
+                else:
+                    self.get_logger().info(
+                        f"        ⚠️  Passed hard requirements (edge+position), added to candidate list (low cube score)"
+                    )
+            else:
+                reasons = []
+                if not edge_in_range:
+                    reasons.append(f"edge out of range({avg_edge*100:.1f}cm)")
+                if not position_valid:
+                    reasons.append(f"position out of range(X={obj.position.x:.3f}m)")
+                self.get_logger().info(
+                    f"        ❌ Filtered: {', '.join(reasons)}"
+                )
+        
+        # Select best candidate
+        if cube_candidates:
+            # If multiple candidates, prefer is_cube=True
+            true_cubes = [c for c in cube_candidates if c[2]]  # c[2] is is_cube
+            
+            if true_cubes:
+                # Have true cubes, select highest score
+                best_cube = max(true_cubes, key=lambda x: x[1])
+                best_obj, best_score, is_best_cube = best_cube
+                self.get_logger().info(
+                    f"   🎯 Selected best cube candidate: {best_obj.class_name}\n"
+                    f"      Score={best_score:.3f} (is_cube=True)\n"
+                    f"      Dimensions=[{best_obj.dimensions.x*100:.1f}, "
+                    f"{best_obj.dimensions.y*100:.1f}, {best_obj.dimensions.z*100:.1f}]cm\n"
+                    f"      Position=[{best_obj.position.x:.3f}, "
+                    f"{best_obj.position.y:.3f}, {best_obj.position.z:.3f}]m"
+                )
+            else:
+                # No true cubes, but have candidates (edge length and position OK)
+                # Select highest scoring candidate
+                best_cube = max(cube_candidates, key=lambda x: x[1])
+                best_obj, best_score, is_best_cube = best_cube
+                self.get_logger().info(
+                    f"   🎯 Selected best candidate (low cube score, but dimensions/position suitable): {best_obj.class_name}\n"
+                    f"      Score={best_score:.3f} (is_cube=False)\n"
+                    f"      Dimensions=[{best_obj.dimensions.x*100:.1f}, "
+                    f"{best_obj.dimensions.y*100:.1f}, {best_obj.dimensions.z*100:.1f}]cm\n"
+                    f"      Position=[{best_obj.position.x:.3f}, "
+                    f"{best_obj.position.y:.3f}, {best_obj.position.z:.3f}]m\n"
+                    f"      ⚠️  Note: Object may not be standard cube, please verify grasp effect"
+                )
+            
+            # Return only highest scoring object
+            return [best_obj]
+        else:
+            self.get_logger().warn(
+                f"   ⚠️  No cube candidates found meeting requirements\n"
+                f"      Requirements: edge length {self.cube_min_edge_length*100:.1f}-{self.cube_max_edge_length*100:.1f}cm, "
+                f"position X≤{self.cube_max_x_position:.2f}m"
+            )
+            # Return empty list
+            return []
     
     def calculate_iou(self, bbox1: List[float], bbox2: List[float]) -> float:
         """
@@ -1076,6 +1140,8 @@ class TriangulationNode(Node):
         depth_raw = (fx * self.baseline) / disparity
         
         # Apply calibration factor
+        # 🔧 IMPORTANT: calibration_factor only corrects Z-axis depth measurement error
+        #    X/Y coordinates should still use depth_raw for projection
         depth = depth_raw * self.depth_calibration_factor
         
         # 3. Get bbox size (for subsequent calculation)
@@ -1098,6 +1164,21 @@ class TriangulationNode(Node):
             f"      ✅ depth = {depth:.4f}m = {depth*100:.1f}cm\n"
             f"      bbox_width = {w1_px:.1f}px\n"
             f"      bbox_height = {h1_px:.1f}px"
+        )
+        
+        # 📊 Calibration data collection log
+        self.get_logger().info(
+            f"   📊 [CALIBRATION DATA] Object: {det1.class_name}\n"
+            f"      View1 bbox center: u1={u1:.1f}px, v1={v1:.1f}px\n"
+            f"      View2 bbox center: u2={u2:.1f}px, v2={v2:.1f}px\n"
+            f"      View1 bbox size: w={w1_px:.1f}px, h={h1_px:.1f}px\n"
+            f"      Disparity: {disparity:.1f}px\n"
+            f"      Camera intrinsics: fx={fx:.1f}, fy={fy:.1f}, cx={cx:.1f}, cy={cy:.1f}\n"
+            f"      Baseline (effective): {self.baseline:.4f}m\n"
+            f"      Depth (raw calculated): {depth_raw:.4f}m = {depth_raw*100:.1f}cm\n"
+            f"      Depth (after calibration): {depth:.4f}m = {depth*100:.1f}cm\n"
+            f"      Calibration factor: {self.depth_calibration_factor:.3f}\n"
+            f"      👉 Please provide: actual_distance_to_camera, actual_x_baselink for recalibration"
         )
         
         # Check depth range
@@ -1145,8 +1226,10 @@ class TriangulationNode(Node):
                 # Project 2D corners to 3D (camera coordinate system)
                 corners_3d_cam = []
                 for x_n, y_n in corners_2d:
-                    # In camera coordinate system, assume depth is depth
-                    point_cam = np.array([x_n * depth, y_n * depth, depth])
+                    # 🔧 CRITICAL FIX: Use depth_raw for X/Y projection, use depth (calibrated) for Z
+                    # Reason: depth_calibration_factor only corrects depth measurement systematic error
+                    #         It should not affect the geometric relationship of X/Y coordinates
+                    point_cam = np.array([x_n * depth_raw, y_n * depth_raw, depth])
                     corners_3d_cam.append(point_cam)
                 
                 self.get_logger().debug(f"   🔧 3D corners (camera frame): {len(corners_3d_cam)} points")
@@ -1315,8 +1398,10 @@ class TriangulationNode(Node):
         yn = (v1_center - cy) / fy
         
         # 3D coordinates (camera coordinate system)
-        # Note: camera coordinate system defined as X-right Y-down Z-forward
-        point_cam_array = np.array([xn * depth, yn * depth, depth])
+        # 🔧 CRITICAL FIX: Use depth_raw for X/Y projection, use depth (calibrated) for Z
+        # Reason: depth_calibration_factor corrects systematic depth measurement error,
+        #         but X/Y geometric projection should use the same scale as disparity-based triangulation
+        point_cam_array = np.array([xn * depth_raw, yn * depth_raw, depth])
         
         self.get_logger().info(
             f"   🎯 3D position calculation details:\n"
@@ -1392,6 +1477,7 @@ class TriangulationNode(Node):
             
             # Output current joint states (for debugging)
             joint_info = "Unknown"
+            joint_angles_dict = {}
             if self.latest_joint_states is not None:
                 try:
                     joint_dict = {}
@@ -1407,6 +1493,7 @@ class TriangulationNode(Node):
                             angle_rad = joint_dict[joint_name]
                             angle_deg = math.degrees(angle_rad)
                             arm_joints.append(f"{joint_name}={angle_deg:.1f}°")
+                            joint_angles_dict[joint_name] = {"rad": angle_rad, "deg": angle_deg}
                     
                     if arm_joints:
                         joint_info = ", ".join(arm_joints)
@@ -1414,10 +1501,60 @@ class TriangulationNode(Node):
                     joint_info = f"Parse failed: {e}"
             
             # Apply position compensation (compensate URDF vs actual installation deviation)
+            # 🔧 POSE-DEPENDENT COMPENSATION: Dynamically calculate Y compensation based on joint1 angle
+            #    When joint1 rotates, camera rotates around Z-axis, causing systematic Y offset
+            #    From test data analysis:
+            #      joint1=+14.6° → Y_raw=-5.41cm → need correction=+5.41cm
+            #      joint1=-14.6° → Y_raw=+6.87cm → need correction=-6.87cm
+            #    Pattern: Y_raw ≈ -r×sin(θ), so correction = +r×sin(θ) to cancel it out
+            #
+            # CRITICAL FIX: For view2+view3 pairing, use average angle (0°) instead of current joint1!
+            
+            dynamic_correction_x = 0.0
+            dynamic_correction_y = 0.0
+            dynamic_correction_z = 0.0
+            
+            # Determine effective joint1 angle based on view pair
+            effective_joint1_rad = 0.0
+            effective_joint1_deg = 0.0
+            
+            if self.current_view_pair:
+                view1_name, view2_name = self.current_view_pair
+                
+                # For view2+view3 pair, use 0° (average of -15° and +15°)
+                if view1_name == "view2" and view2_name == "view3":
+                    effective_joint1_rad = 0.0
+                    effective_joint1_deg = 0.0
+                    self.get_logger().debug(
+                        f"   🔧 VIEW2+VIEW3 pair detected → Using average angle: joint1=0° for Y compensation"
+                    )
+                # For view1+view2 or view1+view3, use current joint1 angle
+                elif joint_angles_dict and 'joint1' in joint_angles_dict:
+                    effective_joint1_rad = joint_angles_dict['joint1']['rad']
+                    effective_joint1_deg = joint_angles_dict['joint1']['deg']
+            elif joint_angles_dict and 'joint1' in joint_angles_dict:
+                # Fallback: use current joint1
+                effective_joint1_rad = joint_angles_dict['joint1']['rad']
+                effective_joint1_deg = joint_angles_dict['joint1']['deg']
+            
+            # Calculate dynamic Y compensation using effective joint1 angle
+            # Positive sign because Y_raw ≈ -r×sin(θ), we add +r×sin(θ) to cancel
+            # Use y_compensation_radius (NOT camera_radius) to avoid affecting baseline calculation
+            dynamic_correction_y = self.y_compensation_radius * math.sin(effective_joint1_rad)
+            
+            self.get_logger().debug(
+                f"   🔧 Pose-dependent compensation: "
+                f"view_pair={self.current_view_pair}, "
+                f"effective_joint1={effective_joint1_deg:.1f}° → "
+                f"Y_correction={dynamic_correction_y*100:.2f}cm "
+                f"(y_compensation_radius={self.y_compensation_radius:.3f}m)"
+            )
+            
+            # Apply total compensation: dynamic + user fine-tune
             position_base_corrected = [
-                position_base[0] + self.position_correction_x,
-                position_base[1] + self.position_correction_y,
-                position_base[2] + self.position_correction_z
+                position_base[0] + dynamic_correction_x + self.position_correction_x,
+                position_base[1] + dynamic_correction_y + self.position_correction_y,
+                position_base[2] + dynamic_correction_z + self.position_correction_z
             ]
             
             self.get_logger().info(
@@ -1426,7 +1563,8 @@ class TriangulationNode(Node):
                 f"      \n"
                 f"      TF2 result: [{position_base[0]:.3f}, {position_base[1]:.3f}, {position_base[2]:.3f}]m\n"
                 f"      Manual calculation: [{point_base_manual[0]:.3f}, {point_base_manual[1]:.3f}, {point_base_manual[2]:.3f}]m\n"
-                f"      Position compensation: X+{self.position_correction_x:.3f}m, Y+{self.position_correction_y:.3f}m, Z+{self.position_correction_z:.3f}m\n"
+                f"      Pose-dependent compensation: X+{dynamic_correction_x:.4f}m, Y+{dynamic_correction_y:.4f}m, Z+{dynamic_correction_z:.4f}m\n"
+                f"      User fine-tune: X+{self.position_correction_x:.4f}m, Y+{self.position_correction_y:.4f}m, Z+{self.position_correction_z:.4f}m\n"
                 f"      Final coordinates: [{position_base_corrected[0]:.3f}, {position_base_corrected[1]:.3f}, {position_base_corrected[2]:.3f}]m\n"
                 f"      \n"
                 f"      Rotation matrix:\n"
@@ -1441,6 +1579,53 @@ class TriangulationNode(Node):
                 f"        = [{point_base_manual[0]:.3f}, {point_base_manual[1]:.3f}, {point_base_manual[2]:.3f}]m\n"
                 f"      \n"
                 f"      base_link coordinates (after compensation): X={position_base_corrected[0]*100:.1f}cm, Y={position_base_corrected[1]*100:.1f}cm, Z={position_base_corrected[2]*100:.1f}cm"
+            )
+            
+            # 📊 Comprehensive calibration data summary
+            joint_data_str = ""
+            if joint_angles_dict:
+                joint_data_str = "\n".join([
+                    f"        {name}: {data['rad']:.6f} rad = {data['deg']:.2f}°" 
+                    for name, data in joint_angles_dict.items()
+                ])
+            else:
+                joint_data_str = "        (no joint state available)"
+            
+            self.get_logger().info(
+                f"   📊 ========== [CALIBRATION DATA SUMMARY] ==========\n"
+                f"   Object: {det1.class_name}\n"
+                f"   \n"
+                f"   [Joint States]\n"
+                f"{joint_data_str}\n"
+                f"   \n"
+                f"   [Image Data]\n"
+                f"        View1 center: u={u1:.2f}px, v={v1:.2f}px\n"
+                f"        View2 center: u={u2:.2f}px, v={v2:.2f}px\n"
+                f"        Disparity: {disparity:.2f}px\n"
+                f"   \n"
+                f"   [Camera Parameters]\n"
+                f"        fx={fx:.2f}, fy={fy:.2f}, cx={cx:.2f}, cy={cy:.2f}\n"
+                f"        baseline_effective={self.baseline:.4f}m\n"
+                f"        camera_radius={self.camera_params.get('camera_radius', 'N/A')}m\n"
+                f"   \n"
+                f"   [Calculated Results]\n"
+                f"        depth_raw (before calibration): {depth_raw:.4f}m = {depth_raw*100:.1f}cm\n"
+                f"        depth (after calibration): {depth:.4f}m = {depth*100:.1f}cm\n"
+                f"        calibration_factor: {self.depth_calibration_factor:.3f}\n"
+                f"        camera_coords: X={point_cam_array[0]:.4f}, Y={point_cam_array[1]:.4f}, Z={point_cam_array[2]:.4f} (m)\n"
+                f"        baselink_coords (raw): X={position_base[0]:.4f}, Y={position_base[1]:.4f}, Z={position_base[2]:.4f} (m)\n"
+                f"        baselink_coords (corrected): X={position_base_corrected[0]:.4f}, Y={position_base_corrected[1]:.4f}, Z={position_base_corrected[2]:.4f} (m)\n"
+                f"   \n"
+                f"   [TF Transform]\n"
+                f"        Translation: X={t_vec[0]:.4f}, Y={t_vec[1]:.4f}, Z={t_vec[2]:.4f} (m)\n"
+                f"        Rotation (quaternion): x={quat[0]:.4f}, y={quat[1]:.4f}, z={quat[2]:.4f}, w={quat[3]:.4f}\n"
+                f"   \n"
+                f"   👉 **Please provide actual measurements for calibration:**\n"
+                f"        - actual_distance_camera_to_object (direct line distance in cm)\n"
+                f"        - actual_x_baselink (object X coordinate in base_link frame in cm)\n"
+                f"        - actual_y_baselink (object Y coordinate in base_link frame in cm)\n"
+                f"        - actual_z_baselink (object Z coordinate in base_link frame in cm)\n"
+                f"   =================================================="
             )
             
             # ⚠️ Important: Keep original position_base unchanged for raw measurement data
@@ -1495,11 +1680,11 @@ class TriangulationNode(Node):
         
         measured_obj.confidence = min(det1.confidence, det2.confidence)
         
-        # Measurement result
+        # Measurement result (use corrected position with dynamic + user compensation)
         measured_obj.position = Point(
-            x=float(position_base[0]),
-            y=float(position_base[1]),
-            z=float(position_base[2])
+            x=float(position_base_corrected[0]),
+            y=float(position_base_corrected[1]),
+            z=float(position_base_corrected[2])
         )
         measured_obj.dimensions = Vector3(
             x=float(real_width),

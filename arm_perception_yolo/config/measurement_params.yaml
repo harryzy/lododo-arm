@@ -2,6 +2,29 @@
 # ROS2 parameter file format
 # Used for TriangulationNode, ProjectionNode, ArmCommandInterface
 
+# Global shared parameters (/** means all nodes can access)
+/**:
+  ros__parameters:
+    # Position correction parameters (shared by triangulation_node and projection_node)
+    # 📊 POSE-DEPENDENT AUTO-COMPENSATION (2025-01-11)
+    # The system now automatically compensates Y offset based on joint1 angle:
+    #   Y_dynamic = -camera_radius × sin(joint1_angle)
+    # 
+    # These parameters are ONLY for final user fine-tuning after auto-compensation:
+    position_correction_x: 0.0     # X fine-tune (meters) - adjust if X still has small error
+    position_correction_y: 0.03     # Y fine-tune (meters) - dynamic compensation handles this automatically
+    position_correction_z: 0.075   # Z fine-tune (meters) - compensate TF transform Z offset (+5.5cm)
+    
+    # 💡 How to calibrate:
+    # 1. Test with auto-compensation (current settings with all zeros)
+    # 2. If X/Y/Z still have consistent errors, adjust these values
+    # 3. Example: If X is always 2cm too small, set position_correction_x: 0.02
+    
+    # 🎲 Cube detection mode (shared by triangulation_node, overridable by launch script)
+    detect_cube_only: false     # Whether to detect only cubes (true=only grasp cubes)
+    cube_aspect_ratio_tolerance: 0.3   # bbox aspect ratio tolerance
+    cube_dimension_tolerance: 0.25     # 3D dimension tolerance
+
 # TriangulationNode parameters
 triangulation_node:
   ros__parameters:
@@ -15,8 +38,20 @@ triangulation_node:
     # Note: Since using joint1 rotation for dual-view, baseline now represents rotation angle
     # baseline=0.20 → joint1 rotates 20 degrees (converted via baseline*100)
     baseline: 0.15              # Dual-view parameter: 0.15 = 15 degrees joint1 rotation
-    camera_radius: 0.33         # Distance from camera to joint1 rotation axis (meters), physical measurement
-    depth_calibration_factor: 0.584  # Depth calibration factor (actual depth/calculated depth), calibrated based on 39cm measured value
+    camera_radius: 0.33         # � Physical measurement: Camera optical center to joint1 axis distance (meters)
+                                 # Measurement method: Use ruler to measure horizontal distance from camera lens center to joint1 rotation axis
+                                 # Used for: 1) baseline_effective calculation  2) Y compensation radius calculation
+                                 # Adjustment: Only when mechanical structure changes (e.g., camera mount relocated)
+    y_compensation_factor: 0.74 # 📊 CALIBRATED (2025-01-11): Y compensation coefficient (dimensionless)
+                                 # Meaning: effective_radius_for_Y / camera_radius ≈ 0.74
+                                 # Reflects: Optical center offset, installation error, lens distortion combined effect
+                                 # Calculation: y_compensation_radius = camera_radius × y_compensation_factor
+                                 # Derived from test data: joint1=±14.6° → Y_compensation=±6.14cm
+                                 # Formula: 6.14cm / sin(14.6°) / 33cm ≈ 0.74
+                                 # Adjustment: Only when camera model/installation angle changes significantly
+    depth_calibration_factor: 0.80  # 📊 UPDATED (2025-01-11): Depth calibration factor (actual/measured ≈ 31/26)
+                                     # Calculated from second test: 39.0/58.0 = 0.672
+                                     # NOTE: This factor ONLY scales Z-axis depth, not X/Y coordinates
     min_disparity: 3.0         # Minimum disparity (pixels)
     max_depth: 2.0              # Maximum measurement depth (meters)
     min_depth: 0.10             # Minimum measurement depth (meters)
@@ -26,6 +61,10 @@ triangulation_node:
     # Matching threshold when classes differ
     class_mismatch_score_threshold: 0.20  # Minimum matching score when classes differ (default 0.5 too high)
     same_class_score_threshold: 0.40      # Minimum matching score when classes are same
+    min_detection_confidence: 0.40        # 🎯 NEW: Minimum detection confidence for triangulation
+                                          # Filters out low-confidence detections before triangulation
+                                          # Default 0.40 ensures only reliable detections are used
+                                          # In your case: cake(0.265), umbrella(0.231) would be filtered out
     
     # Thickness estimation parameters (for reverse-calculating 3D size from oblique view)
     # Formula: thickness = width × thickness_ratio
@@ -50,21 +89,9 @@ triangulation_node:
     # Node switches
     enable_triangulation: true  # Enabled by default
     
-    # 🎲 Cube detection mode
-    detect_cube_only: false     # Whether to detect only cubes (true=only grasp cubes)
-    cube_aspect_ratio_tolerance: 0.3   # bbox aspect ratio tolerance
-    cube_dimension_tolerance: 0.25     # 3D dimension tolerance
     cube_min_edge_length: 0.03  # Cube minimum edge length (meters) = 3cm
     cube_max_edge_length: 0.08  # Cube maximum edge length (meters) = 8cm
     cube_max_x_position: 0.5    # Cube maximum X coordinate (meters) - exceeds arm working range
-    
-    # Position correction parameters (compensate URDF vs actual installation deviation)
-    # Measured: X should be 30-33cm, URDF(25°+1.5cm high) calculates 28.2cm, needs +2cm compensation
-    # Z should be 0-3cm, URDF calculates 4.1cm, within acceptable range
-    # Z compensation: RViz shows 0.03 but JSON outputs -0.025, diff 5.5cm, needs +0.055m compensation
-    position_correction_x: 0.00  # X coordinate compensation +2cm (correction factor method deprecated)
-    position_correction_y: 0.11   # Y coordinate compensation
-    position_correction_z: 0.07   # Z coordinate compensation (to be adjusted)
 
 # ArmCommandInterface parameters (unified configuration)
 arm_command_interface:

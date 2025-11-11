@@ -17,6 +17,7 @@ import math
 import rclpy.executors as rex
 from threading import Thread, Event
 from moveit_msgs.msg import MoveItErrorCodes
+from action_msgs.msg import GoalStatus
 from builtin_interfaces.msg import Duration
 
 
@@ -588,32 +589,176 @@ class ArmPlanningPyNode(Node):
         )
 
     def go_to_home_position(self):
-        # 3. control arm to first return to initialization position
-        self.get_logger().info("control arm to return to initial position...")
-        # 🔧 Synchronize initial state (prevent MoveIt internal state from being out of sync with actual arm)
-        try:
-            self._ensure_start_state_current()
-            self.get_logger().info("✅ MoveIt state already synchronized")
-        except Exception as e:
-            self.get_logger().warn(f"⚠️  State synchronizationfailed: {e}, continueexecute")
+        """Return arm to home position using unified joint configuration method"""
+        self.get_logger().info("Returning to home position...")
+        
         home_cfg = lododo_arm.arm_joint_home_positions()
         names = lododo_arm.arm_joint_names()
+        
         if (not home_cfg) or len(home_cfg) != len(names):
             self.get_logger().error(
-                f"Home joint array invalid: {home_cfg} (expected length {len(names)})，abort this return to home"
+                f"Home joint array invalid: {home_cfg} (expected length {len(names)})"
             )
             return False
-        # Use predefined named position
-        # self.arm.move_to_configuration(lododo_arm.arm_joint_home_positions())
-        # self.arm.wait_until_executed()
-        # self.get_logger().info("Arm already returned to initial position")
-        # self.control_gripper(position=0.0)  # Ensure gripper is open
-        # planexecute
-        self.arm.move_to_configuration(home_cfg)
-        self.arm.wait_until_executed()
-        self.get_logger().debug("Arm already returned to initial position")
-        self.control_gripper(position=0.0)
-        return True
+        
+        # Use unified method with retry
+        success = self.move_to_joint_configuration(
+            joint_positions=home_cfg,
+            description="home position"
+        )
+        
+        if success:
+            # Open gripper at home position
+            self.control_gripper(position=0.0)
+        
+        return success
+
+    def move_to_joint_configuration(
+        self,
+        joint_positions: List[float],
+        max_attempts: int = 2,
+        execution_timeout: float = 15.0,
+        future_timeout: float = 2.0,
+        description: str = "joint configuration"
+    ) -> bool:
+        """
+        Unified method for moving to joint configuration with robust error handling
+        
+        Replaces direct calls to arm.move_to_configuration() + arm.wait_until_executed()
+        with proper future-based result checking and retry mechanism.
+        
+        Args:
+            joint_positions: Target joint positions (radians)
+            max_attempts: Maximum retry attempts (default: 2)
+            execution_timeout: Timeout for motion execution (seconds, default: 15)
+            future_timeout: Timeout for future acquisition (seconds, default: 2)
+            description: Human-readable description for logging
+            
+        Returns:
+            True if successful, False if all attempts failed
+            
+        Example:
+            # Old way (unreliable):
+            self.arm.move_to_configuration(joint_positions=cfg)
+            self.arm.wait_until_executed()
+            
+            # New way (reliable):
+            if not self.move_to_joint_configuration(cfg, description="scan view1"):
+                self.get_logger().error("Failed to move to scan view1")
+                return False
+        """
+        from action_msgs.msg import GoalStatus
+        
+        # Synchronize state before planning
+        self._ensure_start_state_current()
+        
+        for attempt in range(max_attempts):
+            try:
+                if attempt > 0:
+                    self.get_logger().info(
+                        f"Retry moving to {description} (attempt {attempt + 1}/{max_attempts})"
+                    )
+                else:
+                    self.get_logger().info(f"Moving to {description}...")
+                
+                # Plan and execute motion
+                self.arm.move_to_configuration(joint_positions=list(joint_positions))
+                
+                # Wait for future with timeout
+                future = self.arm.get_execution_future()
+                if future is None:
+                    self.get_logger().warn("Future not immediately available, waiting...")
+                    start_time = time.time()
+                    while time.time() - start_time < future_timeout:
+                        future = self.arm.get_execution_future()
+                        if future is not None:
+                            break
+                        rclpy.spin_once(self, timeout_sec=0.01)
+                        time.sleep(0.01)
+                    
+                    if future is None:
+                        self.get_logger().error(
+                            f"❌ Failed to get execution future for {description}"
+                        )
+                        if attempt < max_attempts - 1:
+                            time.sleep(0.5)
+                            continue
+                        return False
+                
+                # Wait for execution completion
+                wait_start = time.time()
+                last_log = wait_start
+                
+                while not future.done():
+                    elapsed = time.time() - wait_start
+                    
+                    # Timeout check
+                    if elapsed > execution_timeout:
+                        self.get_logger().error(
+                            f"❌ Execution timeout ({execution_timeout}s) for {description}"
+                        )
+                        break
+                    
+                    # Progress logging every 2 seconds
+                    if time.time() - last_log > 2.0:
+                        self.get_logger().info(
+                            f"⏳ Still executing {description}... ({elapsed:.1f}s elapsed)"
+                        )
+                        last_log = time.time()
+                    
+                    # Keep ROS spinning
+                    try:
+                        rclpy.spin_once(self, timeout_sec=0.01)
+                    except Exception as e:
+                        self.get_logger().warn(f"spin_once error: {e}")
+                    
+                    time.sleep(0.01)
+                
+                # Check result
+                if not future.done():
+                    self.get_logger().error(
+                        f"❌ Motion to {description} did not complete within timeout"
+                    )
+                    if attempt < max_attempts - 1:
+                        time.sleep(0.5)
+                        continue
+                    return False
+                
+                # Get result status
+                try:
+                    result = future.result()
+                    if result.status == GoalStatus.STATUS_SUCCEEDED:
+                        self.get_logger().info(f"✅ Successfully moved to {description}")
+                        return True
+                    else:
+                        self.get_logger().warn(
+                            f"⚠️ Motion to {description} returned status: {result.status}"
+                        )
+                        if attempt < max_attempts - 1:
+                            time.sleep(0.5)
+                            continue
+                        return False
+                        
+                except Exception as e:
+                    self.get_logger().error(
+                        f"❌ Error getting result for {description}: {e}"
+                    )
+                    if attempt < max_attempts - 1:
+                        time.sleep(0.5)
+                        continue
+                    return False
+                    
+            except Exception as e:
+                self.get_logger().error(f"❌ Exception during motion to {description}: {e}")
+                if attempt < max_attempts - 1:
+                    time.sleep(0.5)
+                    continue
+                return False
+        
+        self.get_logger().error(
+            f"❌ Failed to move to {description} after {max_attempts} attempts"
+        )
+        return False
 
     def move_arm_to_pose(
         self,
@@ -723,13 +868,15 @@ class ArmPlanningPyNode(Node):
                         self.get_logger().info(
                             "compute_ik returned joint solution, attempt move_to_configuration execute (joint space)"
                         )
-                        try:
-                            self.arm.move_to_configuration(list(map(float, ik_sol)))
-                            self.arm.wait_until_executed()
+                        # Use unified method for joint configuration
+                        if self.move_to_joint_configuration(
+                            list(map(float, ik_sol)), 
+                            description="IK fallback solution"
+                        ):
                             self.get_logger().info("joint space execution complete (fallback)")
                             return True
-                        except Exception as e:
-                            self.get_logger().warn(f"joint space execution failed (fallback): {e}")
+                        else:
+                            self.get_logger().warn("joint space execution failed (fallback)")
                     else:
                         self.get_logger().warn(
                             f"compute_ik returned solution length does not match number of joints: len(ik)={len(ik_sol)} vs names={len(names)})"
@@ -752,7 +899,73 @@ class ArmPlanningPyNode(Node):
         if wait:
             # Note: the same functionality can be achieved by setting
             # `synchronous:=false` and `cancel_after_secs` to a negative value.
-            self.arm.wait_until_executed()
+            
+            # Wait for action to be accepted first (give it time to register)
+            # Use time-based waiting to avoid blocking ROS callbacks
+            start_time = time.time()
+            timeout = 2.0  # 2 seconds timeout
+            future = None
+            
+            while time.time() - start_time < timeout:
+                future = self.arm.get_execution_future()
+                if future is not None:
+                    elapsed = time.time() - start_time
+                    self.get_logger().info(f"Got execution future after {elapsed:.3f}s")
+                    break
+                # Keep ROS spinning to process callbacks - use shorter delay
+                try:
+                    rclpy.spin_once(self, timeout_sec=0.01)
+                except Exception:
+                    pass
+                time.sleep(0.01)  # Reduced from 0.05 to 0.01 for faster response
+            
+            if future is None:
+                self.get_logger().error(f"No active motion target after {timeout}s, cannot get execution future")
+                return False
+            
+            # Instead of using wait_until_executed, wait directly on the future
+            # This avoids race conditions with fast-completing motions
+            wait_timeout = 30.0  # 30 second timeout for motion completion
+            wait_start = time.time()
+            last_log_time = wait_start
+            
+            self.get_logger().info("Waiting for motion to complete...")
+            
+            while not future.done():
+                elapsed = time.time() - wait_start
+                
+                # Log progress every 2 seconds
+                if time.time() - last_log_time > 2.0:
+                    self.get_logger().info(f"Still waiting for motion... ({elapsed:.1f}s elapsed)")
+                    last_log_time = time.time()
+                
+                if elapsed > wait_timeout:
+                    self.get_logger().error(f"Motion execution timeout after {wait_timeout}s")
+                    return False
+                
+                # Keep ROS spinning while waiting
+                try:
+                    rclpy.spin_once(self, timeout_sec=0.05)
+                except Exception as e:
+                    self.get_logger().warn(f"spin_once error: {e}")
+                    pass
+                
+                time.sleep(0.01)  # Small sleep to avoid busy-waiting
+            
+            self.get_logger().info(f"Motion completed after {time.time() - wait_start:.3f}s")
+            
+            # Future is done, check result
+            try:
+                result = future.result()
+                if result.status == GoalStatus.STATUS_SUCCEEDED:
+                    self.get_logger().info("Arm successfully reached target pose")
+                    return True
+                else:
+                    self.get_logger().error(f"Arm execution failed with status: {result.status}")
+                    return False
+            except Exception as e:
+                self.get_logger().error(f"Failed to get future result: {e}")
+                return False
         else:
             # Wait for the request to get accepted (i.e., for execution to start)
             self.get_logger().info(
@@ -779,8 +992,15 @@ class ArmPlanningPyNode(Node):
 
             while not future.done():
                 rate.sleep()
-
-        self.get_logger().info("Arm already reached target pose")
+            
+            # Check execution result
+            result = future.result()
+            if result.status == GoalStatus.STATUS_SUCCEEDED:
+                self.get_logger().info("Arm successfully reached target pose")
+                return True
+            else:
+                self.get_logger().error(f"Arm execution failed with status: {result.status}")
+                return False
 
     def move_arm_to_pose_euler(
         self, position, euler_angles, cartesian=False, wait=True

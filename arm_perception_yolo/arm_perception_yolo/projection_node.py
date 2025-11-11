@@ -105,6 +105,13 @@ class ProjectionNode(Node):
         self.position_correction_y = self.get_parameter('position_correction_y').value
         self.position_correction_z = self.get_parameter('position_correction_z').value
         
+        self.get_logger().info(
+            f"📐 Position correction loaded: "
+            f"X={self.position_correction_x:+.3f}m, "
+            f"Y={self.position_correction_y:+.3f}m, "
+            f"Z={self.position_correction_z:+.3f}m"
+        )
+        
         self.default_w = (
             self.cfg.get("objects", {}).get("default", {}).get("width", 0.05)
         )
@@ -460,9 +467,19 @@ class ProjectionNode(Node):
         if u_i is None or v_i is None or w_px_i is None or h_px_i is None:
             return None
 
-        hit_i = self._project_pixel_to_table(u_i, v_i, fx, fy, cx, cy, t, R)
-        if hit_i is None:
-            return None
+        # Use depth estimation method (consistent with main detection)
+        # Calculate depth for this detection using its own bbox width
+        depth_i = fx * real_w / w_px_i
+        
+        # Convert pixel coordinates to normalized coordinates
+        xn_i = (u_i - cx) / fx
+        yn_i = (v_i - cy) / fy
+        
+        # 3D position in camera coordinate system
+        point_cam_i = np.array([xn_i * depth_i, yn_i * depth_i, depth_i])
+        
+        # Transform to base_link coordinate system (raw TF result)
+        hit_i = R @ point_cam_i + t
 
         # size_score uses depth_est computed from primary detection (keeps previous behavior)
         size_score = min(max((w_px_i / fx) * depth_est / (real_w + 1e-6), 0.0), 1.0)
@@ -478,18 +495,23 @@ class ProjectionNode(Node):
             # fallback to legacy absolute meters
             z_offset = getattr(self, 'grasp_z_offset', 0.02)
 
+        # Raw position from TF transform (consistent with dual-view measurement)
+        raw_x = float(hit_i[0])
+        raw_y = float(hit_i[1])
+        raw_z = float(hit_i[2])
+        
         # Apply position correction for grasp pose (consistent with dual-view measurement)
-        grasp_x = float(hit_i[0]) + self.position_correction_x
-        grasp_y = float(hit_i[1]) + self.position_correction_y
-        grasp_z_base = float(max(self.table_h + 0.005, (self.table_h + real_h / 2.0) - z_offset))
-        grasp_z = grasp_z_base + self.position_correction_z
+        grasp_x = raw_x + self.position_correction_x
+        grasp_y = raw_y + self.position_correction_y
+        # For grasp Z: use TF result and apply z_offset and position_correction
+        grasp_z = (raw_z - z_offset) + self.position_correction_z
 
         obj = {
             "class_id": int(cls_i),
             "label": str(label_i),
             "confidence": float(conf_i),
             # Raw position: TF transform result without correction
-            "position": {"x": float(hit_i[0]), "y": float(hit_i[1]), "z": float(hit_i[2])},
+            "position": {"x": raw_x, "y": raw_y, "z": raw_z},
             "center_px": {"u": float(u_i), "v": float(v_i)},
             "bbox_px": {"w": float(w_px_i), "h": float(h_px_i)},
             "grasp_quality": grasp_quality,
@@ -725,16 +747,15 @@ class ProjectionNode(Node):
         # Convert all MeasuredObject to JSON objects
         arr = []
         for msg in self.measured_batch:
-            # Raw position from triangulation (TF transform only, no position_correction applied)
-            raw_x = float(msg.position.x)
-            raw_y = float(msg.position.y)
-            raw_z = float(msg.position.z)
+            # Position from triangulation (already includes dynamic compensation and position_correction)
+            grasp_x = float(msg.position.x)
+            grasp_y = float(msg.position.y)
+            grasp_z = float(msg.position.z)
             
-            # Apply position correction for actual grasp pose
-            # This is where we compensate for URDF vs actual hardware mounting differences
-            grasp_x = raw_x + self.position_correction_x
-            grasp_y = raw_y + self.position_correction_y
-            grasp_z = raw_z + self.position_correction_z
+            self.get_logger().info(
+                f"� Using compensated position from triangulation: "
+                f"grasp=({grasp_x:.4f}, {grasp_y:.4f}, {grasp_z:.4f})"
+            )
             
             # Get dimensions for reference
             real_h = float(msg.dimensions.z)
@@ -743,11 +764,11 @@ class ProjectionNode(Node):
                 "class_id": int(msg.class_id),
                 "label": str(msg.class_name),
                 "confidence": float(msg.confidence),
-                # Raw position: TF transform result without correction
+                # Position: Same as grasp_pose (already compensated in triangulation_node)
                 "position": {
-                    "x": raw_x,
-                    "y": raw_y,
-                    "z": raw_z
+                    "x": grasp_x,
+                    "y": grasp_y,
+                    "z": grasp_z
                 },
                 "dimensions": {
                     "width": float(msg.dimensions.x),

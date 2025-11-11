@@ -60,7 +60,7 @@ class ArmCommandInterface(Node):
             # Use tri-view intelligent scan + specified pose delivery
             #TODO temporary y-axis translation 10cm
             current_pose = self.yolo.get_end_effector_pose()
-            current_pose.position.y -= 0.10
+            current_pose.position.y = 0.10
             Thread(target=self._do_deliver_pose_tri_view(current_pose), daemon=True).start()
         else:
             self.get_logger().warn(f"Unknown command: {cmd}")
@@ -197,9 +197,10 @@ class ArmCommandInterface(Node):
                 })
                 # Try to return to home position
                 try:
-                    self.yolo.go_to_home_position()
-                except Exception:
-                    pass
+                    if not self.yolo.go_to_home_position():
+                        self.get_logger().warn("⚠️ Failed to return to home position")
+                except Exception as e:
+                    self.get_logger().warn(f"⚠️ Exception during home position return: {e}")
                 return
 
             # Move above target pose and release
@@ -728,9 +729,10 @@ class ArmCommandInterface(Node):
                 })
                 # Try to return to home position
                 try:
-                    self.yolo.go_to_home_position()
-                except Exception:
-                    pass
+                    if not self.yolo.go_to_home_position():
+                        self.get_logger().warn("⚠️ Failed to return to home position")
+                except Exception as e:
+                    self.get_logger().warn(f"⚠️ Exception during home position return: {e}")
                 return
             
             # Step 4: Move above hand and release

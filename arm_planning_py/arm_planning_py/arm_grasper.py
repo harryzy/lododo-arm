@@ -131,6 +131,8 @@ class ArmGrasper(ArmPlanningPyNode):
                 f = fut()
                 if f is not None and not f.done():
                     self.get_logger().info("Waiting for previous motion to complete...")
+                    # NOTE: This wait_until_executed is for PREVIOUS motion, not new motion
+                    # For new motions, use move_to_joint_configuration() instead
                     self.arm.wait_until_executed()
                     # Additional wait to ensure state update - use _sleep_with_spin
                     self._sleep_with_spin(0.3)
@@ -220,7 +222,9 @@ class ArmGrasper(ArmPlanningPyNode):
                 # self.get_logger().info(f"Current state: {self.current_state.name}")
 
             elif self.current_state == ArmState.RETURN_HOME:
-                self.go_to_home_position()  # Return to home position
+                if not self.go_to_home_position():  # Return to home position
+                    self.get_logger().error("❌ Failed to return to home position")
+                    return False
                 # home_pose = Pose()
                 # self._execute_move(home_pose)
                 self.get_logger().info(
@@ -247,8 +251,12 @@ class ArmGrasper(ArmPlanningPyNode):
 
     def _execute_move(
         self, target_pose: Pose, position_offset: list[float] = [0.0, 0.0, 0.0]
-    ):
-        """Motion execution helper function"""
+    ) -> bool:
+        """Motion execution helper function
+        
+        Returns:
+            bool: True if movement succeeded, False if failed
+        """
         # New: synchronization barrier before each planning
         self._sync_before_new_plan()
         adjusted_pose = self._apply_position_offset(target_pose, position_offset)
@@ -265,7 +273,7 @@ class ArmGrasper(ArmPlanningPyNode):
             adjusted_pose.orientation.w,
         ]
 
-        self.move_arm_to_pose(
+        success = self.move_arm_to_pose(
             position=position,
             orientation=orientation,
             cartesian=self.cartesian,
@@ -276,9 +284,14 @@ class ArmGrasper(ArmPlanningPyNode):
             wait=True,
         )
         
+        if not success:
+            self.get_logger().error(f"Failed to move arm to position {position}")
+            return False
+        
         # Additional wait to ensure state is fully stable before next step
         # Resolves "Failed to receive current joint state" warning - use _sleep_with_spin
         self._sleep_with_spin(0.5)
+        return True
 
     def _gripper_control(self, close: bool):
         """Gripper control"""

@@ -94,7 +94,7 @@ class YoloDetector(Node):
         self.declare_parameter("detection_mode", "triggered")  # continuous | triggered
         self.declare_parameter("trigger_timeout_sec", 3.0)  # Timeout waiting for first frame after trigger
         self.declare_parameter("min_conf_triggered", 0.20)  # Triggered mode also uses low threshold
-        self.declare_parameter("inference_imgsz", 800)
+        self.declare_parameter("inference_imgsz", 800)  # Revert to 800 (1280 makes detection harder)
         self.declare_parameter("inference_conf", 0.20)  # Inference threshold lowered to 20%
         self.declare_parameter("publish_annotated_image", True)  # Whether to publish visualization image
         self.declare_parameter("annotation_min_conf", 0.15)  # Visualize detections above 15%

@@ -86,12 +86,8 @@ class YoloDetectionNode(ArmGrasper):
                 self.get_logger().debug("✅ joint_state is available")
                 return True
             
-            # Wait a short time for subscription to update
-            time.sleep(0.05)
-            try:
-                rclpy.spin_once(self, timeout_sec=0.01)
-            except:
-                pass
+            # Wait a short time for subscription to update - use _sleep_with_spin to keep ROS active
+            self._sleep_with_spin(0.05)
         
         self.get_logger().warn(f"⚠️  Waiting for joint_state timeout ({timeout}s)")
         return False
@@ -152,22 +148,27 @@ class YoloDetectionNode(ArmGrasper):
                 if max_abs > 2 * math.pi:
                     view1_cfg = [math.radians(a) for a in view1_cfg]
                 
-                self.arm.move_to_configuration(joint_positions=list(view1_cfg))
-                self.arm.wait_until_executed()
+                # Use unified method
+                if not self.move_to_joint_configuration(view1_cfg, description="view1 (front)"):
+                    self.get_logger().error("❌ Failed to move to view1")
+                    return []
+                
+                self.get_logger().info(f"✅ Moved to view1 using joint configuration: {[f'{math.degrees(x):.1f}°' for x in view1_cfg]}")
             else:
-                self.move_to_named_target("front_scan")
+                self.get_logger().error("❌ init_scan_pose not defined, cannot move to front position")
+                return []
             
             # Wait for camera to stabilize and allow user to view image in RViz
             # At 15fps: 1 second = 15 frames, ensures stable image capture and visualization
             # Using _sleep_with_spin to keep ROS callbacks active during wait
-            self._sleep_with_spin(1.5)
+            self._sleep_with_spin(2.0)
         except Exception as e:
             self.get_logger().error(f"Move to view1 failed: {e}")
             return []
         
         # trigger view1 detection
         self.trigger_detection("view1")
-        time.sleep(wait_between_views)
+        self._sleep_with_spin(wait_between_views)  # Keep ROS message loop active
         
         # ===== view 2: -Y direction (joint1 = -angle_offset°) =====
         self.get_logger().info(f"🎥 view 2: Rotate to -Y direction (joint1=-{angle_offset}°)")
@@ -193,8 +194,11 @@ class YoloDetectionNode(ArmGrasper):
                     f"view2joint configuration: joint1={math.degrees(view2_cfg[0]):.1f}°"
                 )
                 
-                self.arm.move_to_configuration(joint_positions=list(view2_cfg))
-                self.arm.wait_until_executed()
+                # Use unified method
+                if not self.move_to_joint_configuration(view2_cfg, description="view2 (-Y direction)"):
+                    self.get_logger().error("❌ Failed to move to view2")
+                else:
+                    self.get_logger().info("✅ Moved to view2")
                 
                 # Wait for camera to stabilize and allow user to view image in RViz
                 # Using _sleep_with_spin to keep ROS callbacks active during wait
@@ -206,7 +210,7 @@ class YoloDetectionNode(ArmGrasper):
         
         # trigger view2 detection
         self.trigger_detection("view2")
-        time.sleep(wait_between_views)
+        self._sleep_with_spin(wait_between_views)  # Keep ROS message loop active
         
         # ===== view 3: +Y direction (joint1 = +angle_offset°) =====
         self.get_logger().info(f"🎥 view 3: Rotate to +Y direction (joint1=+{angle_offset}°)")
@@ -232,8 +236,11 @@ class YoloDetectionNode(ArmGrasper):
                     f"view3joint configuration: joint1={math.degrees(view3_cfg[0]):.1f}°"
                 )
                 
-                self.arm.move_to_configuration(joint_positions=list(view3_cfg))
-                self.arm.wait_until_executed()
+                # Use unified method
+                if not self.move_to_joint_configuration(view3_cfg, description="view3 (+Y direction)"):
+                    self.get_logger().error("❌ Failed to move to view3")
+                else:
+                    self.get_logger().info("✅ Moved to view3")
                 
                 # Wait for camera to stabilize and allow user to view image in RViz
                 # Using _sleep_with_spin to keep ROS callbacks active during wait
@@ -245,6 +252,57 @@ class YoloDetectionNode(ArmGrasper):
         
         # trigger view3 detection (this will trigger TriangulationNode intelligent pairing)
         self.trigger_detection("view3")
+        
+        # ===== CRITICAL: Return to front BEFORE triangulation =====
+        # MUST return immediately after view3 trigger (before waiting for results)
+        # Triangulation needs accurate TF from camera to base_link
+        # Both tri-view and dual-view scenarios need correct TF at front position (joint1=0°)
+        self.get_logger().info("🔙 Returning to front scan position BEFORE triangulation (affects all view combinations)...")
+        
+        # 🔧 Important: Wait longer for joint_state to fully synchronize with MoveIt
+        self.get_logger().info("Waiting for joint_state to synchronize with MoveIt...")
+        self._sleep_with_spin(1.0)  # Give MoveIt time to update current_state_monitor
+        
+        try:
+            self._ensure_start_state_current()
+        except Exception as e:
+            self.get_logger().warn(f"⚠️  State synchronization before return failed: {e}")
+        
+        # 🔧 Additional wait after state synchronization
+        self._sleep_with_spin(0.5)
+        
+        try:
+            if _init_scan_pose is not None:
+                front_cfg = _init_scan_pose()
+                if isinstance(front_cfg, (list, tuple)):
+                    max_abs = max(abs(a) for a in front_cfg)
+                    if max_abs > 2 * math.pi:
+                        front_cfg = [math.radians(a) for a in front_cfg]
+                    
+                    self.get_logger().info(f"Returning to front scan position: {[f'{math.degrees(x):.1f}°' for x in front_cfg]}")
+                    
+                    # 🔧 Wait for joint_state before move
+                    if not self._wait_for_joint_state(timeout=2.0):
+                        self.get_logger().error("❌ joint_state not available, cannot return to front")
+                        return results
+                    
+                    # Use unified method
+                    if not self.move_to_joint_configuration(front_cfg, description="front scan position (before triangulation)"):
+                        self.get_logger().error("❌ Failed to return to front scan position before triangulation")
+                    else:
+                        self.get_logger().info("✅ Successfully returned to front - TF now correct for triangulation")
+                else:
+                    self.get_logger().error(f"❌ init_scan_pose returned invalid type: {type(front_cfg)}")
+            else:
+                self.get_logger().error("❌ init_scan_pose not defined, cannot return to front position")
+        except Exception as e:
+            self.get_logger().error(f"❌ Return to front scan position failed: {e}")
+            import traceback
+            self.get_logger().error(traceback.format_exc())
+        
+        # Additional wait to ensure TF is updated with new joint positions
+        self.get_logger().info("⏱️  Waiting for TF to update with front position...")
+        self._sleep_with_spin(1.0)
         
         # waitingmeasurementresult
         self.get_logger().info(f"⏳ waiting for tri-view measurement result (timeout {timeout}s)...")
@@ -262,7 +320,7 @@ class YoloDetectionNode(ArmGrasper):
                 self.get_logger().info("✅ tri-view measurement complete")
                 break
             
-            time.sleep(0.01)
+            self._sleep_with_spin(0.01)  # Keep ROS active while waiting
         
         self.set_scan_mode(False)
         
@@ -281,27 +339,8 @@ class YoloDetectionNode(ArmGrasper):
                             f"({det['position']['x']:.3f}, {det['position']['y']:.3f}, {det['position']['z']:.3f})"
                         )
         
-        # ===== returnfront_scanposition =====
-        self.get_logger().info("🔙 returnfront_scanposition")
-        
-        try:
-            self._ensure_start_state_current()
-        except Exception as e:
-            self.get_logger().warn(f"⚠️  State synchronization before return failed: {e}")
-        
-        try:
-            if _init_scan_pose is not None:
-                front_cfg = _init_scan_pose()
-                if isinstance(front_cfg, (list, tuple)):
-                    max_abs = max(abs(a) for a in front_cfg)
-                    if max_abs > 2 * math.pi:
-                        front_cfg = [math.radians(a) for a in front_cfg]
-                    self.arm.move_to_configuration(joint_positions=list(front_cfg))
-                    self.arm.wait_until_executed()
-            else:
-                self.move_to_named_target("front_scan")
-        except Exception as e:
-            self.get_logger().warn(f"returnfront_scanpositionfailed: {e}")
+        # Note: Already returned to front position before triangulation (above)
+        # No need to return again here - robot is already at front position
         
         self.get_logger().info(f"✅ tri-view scan complete，measured {len(results)}  objects")
         return results
@@ -396,10 +435,12 @@ class YoloDetectionNode(ArmGrasper):
         # pre-move: Return to safe height/configuration of front_cfg
         try:
             self.get_logger().info("Move to initial scan joint configuration (front)")
-            self.arm.move_to_configuration(joint_positions=list(front_cfg))
-            self.arm.wait_until_executed()
+            if not self.move_to_joint_configuration(front_cfg, description="initial scan position"):
+                self.get_logger().error("❌ Failed to move to initial scan position")
+                return []
         except Exception as e:
             self.get_logger().warn(f"Move to initial joint configuration failed: {e}")
+            return []
 
         offset_rad = math.radians(60.0)  # User requested ±60° on joint1
 
@@ -435,18 +476,13 @@ class YoloDetectionNode(ArmGrasper):
 
             self.get_logger().info(f"scanview {cmd_name} -> joint target[0]={target_cfg[0]:.3f}")
 
-            moved = False
-            for attempt in range(max_attempts_per_view):
-                try:
-                    self.arm.move_to_configuration(joint_positions=list(target_cfg))
-                    self.arm.wait_until_executed()
-                    moved = True
-                    view["joint_positions"] = list(target_cfg)
-                    time.sleep(0.2)
-                    break
-                except Exception as e:
-                    self.get_logger().warn(f"Joint space move failed attempt={attempt}: {e}")
-                    time.sleep(0.1)
+            # Use unified method with retry
+            if self.move_to_joint_configuration(target_cfg, max_attempts=max_attempts_per_view, description=f"scan view {cmd_name}"):
+                moved = True
+                view["joint_positions"] = list(target_cfg)
+                self._sleep_with_spin(0.2)  # Ensure joint_state updates
+            else:
+                moved = False
 
             if not moved:
                 self.get_logger().warn(f"view {cmd_name} unreachable, skipping detection")
@@ -479,7 +515,7 @@ class YoloDetectionNode(ArmGrasper):
                 if self._scan_result is not None:
                     detected = self._scan_result
                     break
-                time.sleep(0.01)
+                self._sleep_with_spin(0.01)  # Keep ROS active while waiting
 
             if detected is not None:
                 raw = detected.get("raw")
@@ -507,11 +543,8 @@ class YoloDetectionNode(ArmGrasper):
                 break
 
         # Return to front_cfg
-        try:
-            self.arm.move_to_configuration(joint_positions=list(front_cfg))
-            self.arm.wait_until_executed()
-        except Exception:
-            pass
+        if not self.move_to_joint_configuration(front_cfg, description="return to front after scan"):
+            self.get_logger().warn("⚠️ Failed to return to front position after scan")
 
         return results
 
@@ -742,26 +775,33 @@ class YoloDetectionNode(ArmGrasper):
             
             # Return to home position
             self.get_logger().info("Return to home position...")
-            self.go_to_home_position()
+            if not self.go_to_home_position():
+                self.get_logger().error("❌ Failed to return to home position")
+                return False
             # Use _sleep_with_spin to keep ROS callbacks active during wait
             # This ensures joint_states continue updating for next move
             self._sleep_with_spin(2.0)
             
             # Open gripper
             self._gripper_control(close=False)
-            self._sleep_with_spin(1.0)
+            # Allow extra time for joint_states to stabilize after gripper operation
+            self._sleep_with_spin(2.0)  # Increased from 1.0 to 2.0 for MoveIt validation
             
             # Move to pre-grasp position (above object)
             pre_grasp_offset = [0.0, 0.0, 0.10]
             self.get_logger().info(f"Move to pre-grasp position, offset: {pre_grasp_offset}")
-            self._execute_move(grasp_pose, pre_grasp_offset)
-            self._sleep_with_spin(1.5)
+            if not self._execute_move(grasp_pose, pre_grasp_offset):
+                self.get_logger().error("❌ Failed to move to pre-grasp position")
+                return False
+            self._sleep_with_spin(2.0)  # Increased from 1.5 to 2.0 for stability
             
             # Descend to grasp position
             self.get_logger().info("Descend to grasp position...")
             grasp_offset = [0.0, 0.0, 0.05]
-            self._execute_move(grasp_pose, grasp_offset)
-            self._sleep_with_spin(1.0)
+            if not self._execute_move(grasp_pose, grasp_offset):
+                self.get_logger().error("❌ Failed to descend to grasp position")
+                return False
+            self._sleep_with_spin(1.5)  # Increased from 1.0 for stability
             
             # Close gripper
             self.get_logger().info("Close gripper...")
@@ -777,7 +817,9 @@ class YoloDetectionNode(ArmGrasper):
             lift_pose.orientation = grasp_pose.orientation
             
             self.get_logger().info(f"Lift object to height: {lift_height}m")
-            self._execute_move(lift_pose, [0.0, 0.0, 0.0])
+            if not self._execute_move(lift_pose, [0.0, 0.0, 0.0]):
+                self.get_logger().error("❌ Failed to lift object")
+                return False
             self._sleep_with_spin(1.5)
             
             self.get_logger().info("grasp and lift complete")
@@ -841,7 +883,7 @@ class YoloDetectionNode(ArmGrasper):
                     # Clear result, prepare for next detection
                     self._scan_result = None
                 
-                time.sleep(0.1)
+                self._sleep_with_spin(0.1)  # Keep ROS active while waiting
             
             # Not detected, continue loop
             elapsed = time.time() - start_time
@@ -878,7 +920,9 @@ class YoloDetectionNode(ArmGrasper):
             
             # Move above hand
             self.get_logger().info("Move above hand...")
-            self._execute_move(delivery_pose, [0.0, 0.0, 0.0])
+            if not self._execute_move(delivery_pose, [0.0, 0.0, 0.0]):
+                self.get_logger().error("❌ Failed to move above hand")
+                return False
             self._sleep_with_spin(2.0)
             
             # releaseobject
@@ -895,12 +939,16 @@ class YoloDetectionNode(ArmGrasper):
             retreat_pose.orientation = delivery_pose.orientation
             
             self.get_logger().info("Raise end effector...")
-            self._execute_move(retreat_pose, [0.0, 0.0, 0.0])
+            if not self._execute_move(retreat_pose, [0.0, 0.0, 0.0]):
+                self.get_logger().warn("⚠️ Failed to raise end effector after delivery")
+                # Not critical, don't return False here
             self._sleep_with_spin(1.0)
             
             # Return to home position
             self.get_logger().info("Return to home position...")
-            self.go_to_home_position()
+            if not self.go_to_home_position():
+                self.get_logger().error("❌ Failed to return to home position after delivery")
+                return False
             self._sleep_with_spin(1.0)
             
             self.get_logger().info("Delivery to hand complete")
@@ -1014,7 +1062,9 @@ class YoloDetectionNode(ArmGrasper):
 
         # Return to home position
         self.get_logger().info("Return to home position...")
-        self.go_to_home_position()
+        if not self.go_to_home_position():
+            self.get_logger().error("❌ Failed to return to home position")
+            return False
         self.current_state = ArmState.MOVE_TO_PREGRASP
         self._sleep_with_spin(5.0)
 
@@ -1126,9 +1176,10 @@ def main():
                     node.grasping_for_scan_rs(pose, None, wait_time=2.0)
                     break
         # Block main thread until rclpy requests exit (or user Ctrl-C)
+        # Use _sleep_with_spin to keep ROS message loop active
         try:
             while rclpy.ok():
-                time.sleep(0.1)
+                node._sleep_with_spin(0.1)
         except KeyboardInterrupt:
             pass
 
