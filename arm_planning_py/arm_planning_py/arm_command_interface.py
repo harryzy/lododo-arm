@@ -21,9 +21,11 @@ class ArmCommandInterface(Node):
         self.command_sub = self.create_subscription(String, "/arm_command", self.cb_command, 10)
         self.result_pub = self.create_publisher(String, "/arm_command_result", 10)
 
-        # Declare and read parameters (consistent with measurement_params.yaml)
-        self.declare_parameter("baseline", 0.10)
-        self.declare_parameter("dual_view_timeout", 10.0)
+        # Declare and read parameters from global section (/** in measurement_params.yaml)
+        # Note: baseline and dual_view_timeout are GLOBAL parameters
+        #       but still need to be declared to be accessible
+        self.declare_parameter("baseline", 0.15)  # Default, will be overridden by global yaml
+        self.declare_parameter("dual_view_timeout", 10.0)  # Default, will be overridden by global yaml
         
         self.baseline = self.get_parameter("baseline").value
         self.dual_view_timeout = self.get_parameter("dual_view_timeout").value

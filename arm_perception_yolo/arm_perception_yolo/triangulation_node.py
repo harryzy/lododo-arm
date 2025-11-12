@@ -53,7 +53,9 @@ class TriangulationNode(Node):
         super().__init__('triangulation_node')
         
         # Declare parameters
-        self.declare_parameter('baseline', 0.20)  # joint1 rotation angle parameter
+        # Note: 'baseline' is a GLOBAL parameter (defined in /** section of yaml)
+        #       but still needs to be declared to be accessible in the node
+        self.declare_parameter('baseline', 0.15)  # Default value, will be overridden by global yaml parameter
         self.declare_parameter('camera_radius', 0.33)  # Distance from camera to joint1 axis (meters) - for baseline calculation
         self.declare_parameter('y_compensation_factor', 0.74)  # Y compensation coefficient (effective_radius / camera_radius) - calibrated once
         self.declare_parameter('depth_calibration_factor', 1.0)  # Depth calibration factor (actual depth / calculated depth)

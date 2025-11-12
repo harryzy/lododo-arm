@@ -1,30 +1,30 @@
 #!/bin/bash
 # Cube detection specialized startup script
-# Enable cube detection mode, only returns the most cube-like object
+# Simplified: Only tells launch file to enable cube detection
+# All parameters are managed in measurement_params.yaml and yolo_perception_launch.py
 
 echo "========================================"
 echo "  🎲 Cube Detection Mode Startup"
 echo "========================================"
 echo ""
 echo "📋 Configuration:"
-echo "  • Cube detection: enabled"
-echo "  • thickness_ratio: 1.0 (cube)"
-echo "  • bbox aspect ratio tolerance: 0.5"
-echo "  • 3D dimension tolerance: 0.4"
+echo "  • Mode: Cube detection enabled"
+echo "  • Parameters: from measurement_params.yaml"
+echo "  • Launch file: yolo_perception_launch.py"
 echo ""
 echo "🎯 Will only return 1 most cube-like object"
+echo ""
+echo "💡 To override parameters, pass launch arguments:"
+echo "   Example: baseline:=0.20 min_conf:=0.15"
 echo "========================================"
 echo ""
 
 # Source ROS2 workspace
 source install/setup.bash
 
-# Launch YOLO tri-view detection (with cube detection mode)
+# Launch YOLO perception with cube detection mode
+# All parameters are configured in measurement_params.yaml
+# Pass any additional arguments to the launch file (e.g., baseline:=0.20)
 ros2 launch arm_perception_yolo yolo_perception_launch.py \
-  model_path:=yolov8m.pt \
-  min_conf:=0.15 \
-  detection_mode:=triggered \
-  baseline:=0.20 \
   detect_cube_only:=True \
-  cube_aspect_ratio_tolerance:=0.5 \
-  cube_dimension_tolerance:=0.4
+  "$@"

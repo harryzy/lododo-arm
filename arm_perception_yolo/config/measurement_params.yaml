@@ -5,6 +5,22 @@
 # Global shared parameters (/** means all nodes can access)
 /**:
   ros__parameters:
+    # 🎯 Dual-view baseline parameter (GLOBAL - used by all nodes)
+    # This parameter defines the joint1 rotation angle for dual-view triangulation
+    # baseline=0.15 → joint1 rotates 15 degrees (converted via baseline×100)
+    # baseline=0.20 → joint1 rotates 20 degrees
+    # 
+    # Used by:
+    # - triangulation_node: Calculate effective baseline and triangulation
+    # - arm_command_interface: Control arm joint1 rotation angle
+    # 
+    # 🔧 Adjustment guide:
+    # - Larger angle → Better depth accuracy at far distances, but slower scanning
+    # - Smaller angle → Faster scanning, but limited far-distance measurement
+    # - Recommended range: 0.15~0.25 (15°~25°)
+    baseline: 0.15              # Dual-view rotation angle parameter (dimensionless, multiply by 100 to get degrees)
+                                 # ✅ CALIBRATED: 0.15 (15°) - optimal balance for detection reliability
+    
     # Position correction parameters (shared by triangulation_node and projection_node)
     # 📊 POSE-DEPENDENT AUTO-COMPENSATION (2025-01-11)
     # The system now automatically compensates Y offset based on joint1 angle:
@@ -24,6 +40,9 @@
     detect_cube_only: false     # Whether to detect only cubes (true=only grasp cubes)
     cube_aspect_ratio_tolerance: 0.3   # bbox aspect ratio tolerance
     cube_dimension_tolerance: 0.25     # 3D dimension tolerance
+    
+    # ⏱️ Dual-view timeout parameter (GLOBAL)
+    dual_view_timeout: 10.0     # Detection timeout for each view (seconds)
 
 # TriangulationNode parameters
 triangulation_node:
@@ -35,10 +54,9 @@ triangulation_node:
     camera_cy: 240.0
     
     # Triangulation parameters
-    # Note: Since using joint1 rotation for dual-view, baseline now represents rotation angle
-    # baseline=0.20 → joint1 rotates 20 degrees (converted via baseline*100)
-    baseline: 0.15              # Dual-view parameter: 0.15 = 15 degrees joint1 rotation
-    camera_radius: 0.33         # � Physical measurement: Camera optical center to joint1 axis distance (meters)
+    # Note: baseline parameter moved to global section (/** above)
+    # The baseline value is now shared across all nodes to avoid inconsistency
+    camera_radius: 0.33         # 📐 Physical measurement: Camera optical center to joint1 axis distance (meters)
                                  # Measurement method: Use ruler to measure horizontal distance from camera lens center to joint1 rotation axis
                                  # Used for: 1) baseline_effective calculation  2) Y compensation radius calculation
                                  # Adjustment: Only when mechanical structure changes (e.g., camera mount relocated)
@@ -49,9 +67,11 @@ triangulation_node:
                                  # Derived from test data: joint1=±14.6° → Y_compensation=±6.14cm
                                  # Formula: 6.14cm / sin(14.6°) / 33cm ≈ 0.74
                                  # Adjustment: Only when camera model/installation angle changes significantly
-    depth_calibration_factor: 0.80  # 📊 UPDATED (2025-01-11): Depth calibration factor (actual/measured ≈ 31/26)
-                                     # Calculated from second test: 39.0/58.0 = 0.672
-                                     # NOTE: This factor ONLY scales Z-axis depth, not X/Y coordinates
+    depth_calibration_factor: 0.80  # 📊 CALIBRATED (2025-11-12): For baseline=0.15 (15°)
+                                     # Test history: 0.80→0.90→1.03→1.05 (tested with baseline=0.20)
+                                     # Final calibration: 1.03 gives accurate X-axis at baseline=0.15
+                                     # Formula: actual_depth = raw_depth × this_factor
+                                     # NOTE: Z compensation now uses z_depth_coefficient, auto-scales with this factor
     min_disparity: 3.0         # Minimum disparity (pixels)
     max_depth: 2.0              # Maximum measurement depth (meters)
     min_depth: 0.10             # Minimum measurement depth (meters)
@@ -93,8 +113,6 @@ triangulation_node:
     cube_max_edge_length: 0.08  # Cube maximum edge length (meters) = 8cm
     cube_max_x_position: 0.5    # Cube maximum X coordinate (meters) - exceeds arm working range
 
-# ArmCommandInterface parameters (unified configuration)
-arm_command_interface:
-  ros__parameters:
-    baseline: 0.15              # Dual-view parameter (consistent with above)
-    dual_view_timeout: 10.0     # Detection timeout for each view (seconds)
+# Note: ArmCommandInterface parameters section removed
+# All parameters (baseline, dual_view_timeout) are now in global section (/** above)
+# ArmCommandInterface will read them directly from global parameters

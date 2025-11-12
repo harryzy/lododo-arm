@@ -58,10 +58,13 @@ def generate_launch_description():
         description='Detection mode: triggered or continuous'
     )
     
+    # Note: baseline is now a GLOBAL parameter in measurement_params.yaml
+    # This launch argument is kept for backward compatibility and override capability
+    # Leave empty to use yaml value, or specify like: baseline:=0.20 to override
     baseline_arg = DeclareLaunchArgument(
         'baseline',
-        default_value='0.15',  # 15° joint1 rotation
-        description='Dual-view baseline distance/meter (actually rotation angle: 0.15=15 degrees)'
+        default_value='',  # Empty = use value from measurement_params.yaml
+        description='Override baseline angle (empty=use yaml, e.g., 0.20 for 20°)'
     )
     
     detect_cube_only_arg = DeclareLaunchArgument(
@@ -110,15 +113,17 @@ def generate_launch_description():
     )
     
     # 2. TriangulationNode (Triangulation, enabled by default)
+    # Note: baseline is loaded from global parameters in measurement_cfg
+    #       Only override here if launch argument is provided (non-empty)
     triangulation_node = Node(
         package='arm_perception_yolo',
         executable='triangulation_node',
         name='triangulation_node',
         output='screen',
         parameters=[
-            measurement_cfg,
+            measurement_cfg,  # Contains global baseline parameter
             {
-                'baseline': baseline,
+                'baseline': baseline,  # Optional override (if baseline launch arg is non-empty)
                 'enable_triangulation': True,  # Enabled by default
                 'detect_cube_only': detect_cube_only,  # Cube detection mode
                 'cube_aspect_ratio_tolerance': cube_aspect_ratio_tolerance,  # bbox aspect ratio tolerance
@@ -164,7 +169,12 @@ def generate_launch_description():
             '  • model_path: ', model_path, '\n',
             '  • min_conf: ', min_conf, '\n',
             '  • detection_mode: ', detection_mode, '\n',
-            '  • baseline: ', baseline, 'm\n',
+            '  • baseline: from measurement_params.yaml (override: ', baseline, ')\n',
+            '  • detect_cube_only: ', detect_cube_only, '\n',
+            '\n',
+            'Configuration:\n',
+            '  📄 Global params: measurement_params.yaml (baseline, dual_view_timeout)\n',
+            '  📄 Perception config: perception_params.yaml\n',
             '\n',
             'Interfaces:\n',
             '  Input: /detection_request (String)\n',
@@ -177,6 +187,7 @@ def generate_launch_description():
             '  Dual-view: /detection_request (view1) → YOLO\n',
             '         /detection_request (view2) → YOLO → Triangulation → JSON\n',
             '\n',
+            '💡 To change baseline: Edit measurement_params.yaml or use baseline:=0.20\n',
             '='*70, '\n'
         ]
     )

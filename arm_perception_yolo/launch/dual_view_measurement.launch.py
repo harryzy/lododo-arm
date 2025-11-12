@@ -52,10 +52,13 @@ def generate_launch_description():
         description='Enable automatic arm movement (false=manual mode)'
     )
     
+    # Note: baseline is now a GLOBAL parameter defined in measurement_params.yaml
+    # This launch argument is kept for backward compatibility and testing
+    # If you want to override the yaml value, use: baseline:=0.20
     baseline_arg = DeclareLaunchArgument(
         'baseline',
-        default_value='0.20',
-        description='Camera translation distance (meters)'
+        default_value='',  # Empty = use value from yaml
+        description='Camera rotation angle parameter (empty=use yaml, or override like 0.20)'
     )
     
     # Get parameters

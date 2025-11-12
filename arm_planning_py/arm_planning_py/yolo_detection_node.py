@@ -127,13 +127,6 @@ class YoloDetectionNode(ArmGrasper):
         self._scan_result = None
         self.set_scan_mode(True)
         
-        # 🔧 Synchronize MoveIt state
-        try:
-            self._ensure_start_state_current()
-            self.get_logger().info("✅ MoveIt state synchronized")
-        except Exception as e:
-            self.get_logger().warn(f"⚠️  State synchronization failed: {e}")
-        
         results = []
         
         # ===== View 1: Front (joint1 = 0°) =====
@@ -141,6 +134,9 @@ class YoloDetectionNode(ArmGrasper):
         try:
             # Wait for joint_state available
             self._wait_for_joint_state()
+            
+            # 🔧 CRITICAL: Synchronize state immediately before movement
+            self._ensure_start_state_current()
             
             if _init_scan_pose is not None:
                 view1_cfg = list(_init_scan_pose())
