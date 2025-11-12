@@ -10,6 +10,7 @@ from std_msgs.msg import String
 
 from .yolo_detection_node import YoloDetectionNode
 from geometry_msgs.msg import Pose, Point, Quaternion
+from moveit_msgs.msg import CollisionObject
 
 
 class ArmCommandInterface(Node):
@@ -38,6 +39,48 @@ class ArmCommandInterface(Node):
         # We will create a single executor at process level and add both nodes to avoid multi-thread spin conflicts.
         # Use fast planning mode to be consistent with simulation
         self.yolo = YoloDetectionNode(is_fast_robust_plan=True)
+        
+        # Subscribe to collision_object to track scene objects
+        # Note: /planning_scene is not actively published by move_group in this configuration
+        # Instead, we subscribe to /collision_object which is published by projection_node
+        self._collision_objects = {}  # dict: object_id -> CollisionObject
+        self._collision_obj_sub = self.create_subscription(
+            CollisionObject,
+            "/collision_object",
+            self._collision_object_callback,
+            10
+        )
+        self.get_logger().info("Subscribed to /collision_object for scene object tracking")
+    
+    def _collision_object_callback(self, msg: CollisionObject):
+        """Handle incoming collision objects from /collision_object topic"""
+        if msg.operation == CollisionObject.ADD or msg.operation == CollisionObject.APPEND:
+            self._collision_objects[msg.id] = msg
+            self.get_logger().debug(f"📦 Added/Updated object: {msg.id}")
+            
+            # Debug: Log pose information
+            if hasattr(msg, 'primitive_poses') and msg.primitive_poses:
+                pose = msg.primitive_poses[0]
+                self.get_logger().info(
+                    f"  📍 primitive_poses[0]: X={pose.position.x:.3f}, "
+                    f"Y={pose.position.y:.3f}, Z={pose.position.z:.3f}"
+                )
+            elif hasattr(msg, 'pose') and msg.pose:
+                self.get_logger().info(
+                    f"  📍 pose: X={msg.pose.position.x:.3f}, "
+                    f"Y={msg.pose.position.y:.3f}, Z={msg.pose.position.z:.3f}"
+                )
+            else:
+                self.get_logger().warn(f"  ⚠️  No pose data found in CollisionObject!")
+                
+        elif msg.operation == CollisionObject.REMOVE:
+            if msg.id in self._collision_objects:
+                del self._collision_objects[msg.id]
+                self.get_logger().debug(f"🗑️  Removed object: {msg.id}")
+        elif msg.operation == CollisionObject.MOVE:
+            if msg.id in self._collision_objects:
+                self._collision_objects[msg.id] = msg
+                self.get_logger().debug(f"🔄 Moved object: {msg.id}")
 
     def cb_command(self, msg: String):
         cmd = msg.data.strip().lower()
@@ -58,10 +101,15 @@ class ArmCommandInterface(Node):
             Thread(target=self._do_grasp_lift_tri_view, daemon=True).start()
         elif cmd == "deliver_pose":
             # Use tri-view intelligent scan + specified pose delivery
-            #TODO temporary y-axis translation 10cm
-            current_pose = self.yolo.get_end_effector_pose()
-            current_pose.position.y = 0.10
-            Thread(target=self._do_deliver_pose_tri_view(current_pose), daemon=True).start()
+        
+            target_pose = self.get_scene_object_pose(timeout=2.0)
+    
+            if target_pose is None:
+                self.get_logger().warn("get_scene_object_pose returned None, using end_effector_pose with y-offset=0.10m")
+                target_pose = self.yolo.get_end_effector_pose()
+                target_pose.position.y = 0.10
+            
+            Thread(target=self._do_deliver_pose_tri_view(target_pose), daemon=True).start()
         else:
             self.get_logger().warn(f"Unknown command: {cmd}")
             self._publish_result({"command": cmd, "status": "unknown_command"})
@@ -870,6 +918,158 @@ class ArmCommandInterface(Node):
                 return pose
             except Exception as e:
                 self.get_logger().warn(f"Extraction from position failed: {e}")
+        
+        return None
+
+    def get_scene_object_pose(self, timeout: float = 2.0) -> Pose:
+        """
+        Get pose of scene object from collision objects
+        
+        Strategy:
+        - If only 1 object: return its pose
+        - If multiple objects: return pose of object with X closest to 0 (closest to robot base)
+        - If no objects: return None
+        
+        Args:
+            timeout: Maximum wait time for collision object data (seconds)
+            
+        Returns:
+            Pose object if found, None otherwise
+        """
+        import time
+        
+        # Wait for collision object data
+        start_time = time.time()
+        while not self._collision_objects:
+            if time.time() - start_time > timeout:
+                self.get_logger().warn(
+                    f"⏱️  Timeout waiting for collision object data ({timeout}s)"
+                )
+                return None
+            
+            # Keep ROS spinning to receive messages
+            try:
+                rclpy.spin_once(self, timeout_sec=0.1)
+            except Exception:
+                pass
+            
+            time.sleep(0.05)
+        
+        # Get all collision objects
+        objects = list(self._collision_objects.values())
+        num_objects = len(objects)
+        
+        if num_objects == 0:
+            self.get_logger().warn("⚠️  No collision objects available")
+            return None
+        
+        self.get_logger().info(f"📦 Found {num_objects} scene object(s)")
+        
+        # Case 1: Only one object - return its pose directly
+        if num_objects == 1:
+            obj = objects[0]
+            pose = self._extract_pose_from_collision_object(obj)
+            
+            if pose:
+                self.get_logger().info(
+                    f"✅ Single object found: '{obj.id}' at "
+                    f"X={pose.position.x:.3f}, Y={pose.position.y:.3f}, Z={pose.position.z:.3f}"
+                )
+                return pose
+            else:
+                self.get_logger().warn(f"⚠️  Object '{obj.id}' has no pose data")
+                return None
+        
+        # Case 2: Multiple objects - find one with X closest to 0
+        closest_obj = None
+        closest_pose = None
+        min_x_distance = float('inf')
+        
+        for obj in objects:
+            # Extract pose from collision object
+            pose = self._extract_pose_from_collision_object(obj)
+            
+            if pose is None:
+                self.get_logger().warn(f"⚠️  Object '{obj.id}' has no pose data, skipping")
+                continue
+            
+            # Calculate distance from X=0 (robot base)
+            x_distance = abs(pose.position.x)
+            
+            self.get_logger().info(
+                f"  Object '{obj.id}': "
+                f"X={pose.position.x:.3f}, Y={pose.position.y:.3f}, Z={pose.position.z:.3f}, "
+                f"|X|={x_distance:.3f}"
+            )
+            
+            if x_distance < min_x_distance:
+                min_x_distance = x_distance
+                closest_obj = obj
+                closest_pose = pose
+        
+        if closest_obj:
+            self.get_logger().info(
+                f"✅ Selected closest object: '{closest_obj.id}' "
+                f"(|X|={min_x_distance:.3f}m from base)"
+            )
+            return closest_pose
+        
+        self.get_logger().warn("⚠️  No valid object poses found")
+        return None
+    
+    def _extract_pose_from_collision_object(self, obj: CollisionObject) -> Pose:
+        """
+        Extract pose from CollisionObject
+        
+        Tries multiple fields in order:
+        1. obj.pose (direct pose field)
+        2. obj.primitive_poses[0] (for primitives like boxes)
+        3. obj.mesh_poses[0] (for mesh objects)
+        
+        Returns:
+            Pose object if found, None otherwise
+        """
+        self.get_logger().info(f"🔍 Extracting pose from object '{obj.id}'...")
+        
+        try:
+            # Try direct pose field first
+            if hasattr(obj, 'pose') and obj.pose is not None:
+                # Check if pose has valid position (not all zeros)
+                if obj.pose.position.x != 0.0 or obj.pose.position.y != 0.0 or obj.pose.position.z != 0.0:
+                    self.get_logger().info(
+                        f"  ✅ Found pose field: X={obj.pose.position.x:.3f}, "
+                        f"Y={obj.pose.position.y:.3f}, Z={obj.pose.position.z:.3f}"
+                    )
+                    return obj.pose
+                else:
+                    self.get_logger().warn("  ⚠️  pose field exists but is (0,0,0)")
+            
+            # Try primitive_poses
+            if hasattr(obj, 'primitive_poses') and obj.primitive_poses:
+                self.get_logger().info(f"  📦 Found {len(obj.primitive_poses)} primitive_poses")
+                pose = obj.primitive_poses[0]
+                self.get_logger().info(
+                    f"  ✅ Using primitive_poses[0]: X={pose.position.x:.3f}, "
+                    f"Y={pose.position.y:.3f}, Z={pose.position.z:.3f}"
+                )
+                return pose
+            
+            # Try mesh_poses
+            if hasattr(obj, 'mesh_poses') and obj.mesh_poses:
+                self.get_logger().info(f"  🔺 Found {len(obj.mesh_poses)} mesh_poses")
+                return obj.mesh_poses[0]
+            
+            # Try subframe_poses (less common)
+            if hasattr(obj, 'subframe_poses') and obj.subframe_poses:
+                self.get_logger().info(f"  🔲 Found {len(obj.subframe_poses)} subframe_poses")
+                return obj.subframe_poses[0]
+            
+            self.get_logger().error(f"  ❌ No pose data found in any field!")
+                
+        except Exception as e:
+            self.get_logger().error(f"  ❌ Error extracting pose from object '{obj.id}': {e}")
+            import traceback
+            self.get_logger().error(traceback.format_exc())
         
         return None
 

@@ -185,23 +185,45 @@ class ArmPlanningPyNode(Node):
         "Invalid Trajectory: start point deviates"error
         """
         import time
+        from builtin_interfaces.msg import Time as TimeMsg
         
-        # method1: waiting for joint_state update - use _sleep_with_spin to keep ROS active
-        self._sleep_with_spin(0.1)  # Give joint_state_publisher time to update
+        self.get_logger().info("🔄 Starting state synchronization...")
         
-        # method2: Read latest joint_state
+        # CRITICAL FIX: joint_states publishes at ~1.6Hz (every 0.62s)
+        # Wait 1.5s to guarantee at least 2 fresh updates
+        # This ensures MoveIt validation (which requires state within 1s) will pass
+        self.get_logger().info("⏳ Waiting 1.5s for fresh joint_state (publish rate: ~1.6Hz)...")
+        self._sleep_with_spin(1.5)
+        
+        self.get_logger().info("✅ Wait completed, verifying timestamp...")
+        
+        # method2: Read latest joint_state and verify timestamp
         js = getattr(self.arm, "joint_state", None)
         if js is None:
             self.get_logger().warn("⚠️  joint_state is empty, skip state synchronization")
             return
         
+        # method2.5: Verify joint_state timestamp is recent (within 0.5s)
+        current_time = self.get_clock().now()
+        js_time_sec = js.header.stamp.sec + js.header.stamp.nanosec * 1e-9
+        current_time_sec = current_time.seconds_nanoseconds()[0] + current_time.seconds_nanoseconds()[1] * 1e-9
+        time_diff = current_time_sec - js_time_sec
+        
+        self.get_logger().info(
+            f"🕒 joint_state timestamp age: {time_diff:.3f}s (should be < 0.5s for MoveIt validation)"
+        )
+        
+        if time_diff > 0.5:
+            self.get_logger().error(
+                f"❌ joint_state timestamp is too old: {time_diff:.3f}s! This will likely fail MoveIt validation."
+            )
+        
         # method3: Write to MoveIt start_state
         if hasattr(self.arm, "_MoveIt2__move_action_goal"):
             try:
                 self.arm._MoveIt2__move_action_goal.request.start_state.joint_state = js
-                self.get_logger().debug(
-                    f"✅ Already synchronized joint_state to start_state: "
-                    f"positions={[f'{p:.3f}' for p in js.position[:3]]}"
+                self.get_logger().info(
+                    f"✅ Synchronized joint_state to start_state, timestamp_age={time_diff:.3f}s"
                 )
             except Exception as e:
                 self.get_logger().warn(f"⚠️  Failed to write start_state: {e}")
@@ -215,6 +237,8 @@ class ArmPlanningPyNode(Node):
                 self.arm.joint_state = js
             except Exception:
                 pass
+        
+        self.get_logger().info("🏁 State synchronization finished")
 
     def _retime_traj(self, traj, dt: float = 0.2):
         """
@@ -784,8 +808,17 @@ class ArmPlanningPyNode(Node):
         return:
             bool: whether execution succeeded
         """
+        self.get_logger().info(f"🎯 move_arm_to_pose ENTRY: position={position}, orientation={orientation}")
         self.get_logger().info(f"Plan arm move to position: {position}, orientation: {orientation}")
-        self._ensure_start_state_current()
+        
+        try:
+            self.get_logger().info("📞 Calling _ensure_start_state_current()...")
+            self._ensure_start_state_current()
+            self.get_logger().info("✅ _ensure_start_state_current() completed")
+        except Exception as e:
+            self.get_logger().error(f"❌ Exception in _ensure_start_state_current(): {e}")
+            import traceback
+            self.get_logger().error(traceback.format_exc())
         # Parameter validation
         if len(position) != 3:
             self.get_logger().error("position parameter must be a list containing 3 elements [x, y, z]")
@@ -1031,6 +1064,13 @@ class ArmPlanningPyNode(Node):
     def control_gripper(self, position: float = 0.0, timeout: float = 8.0):
         # 4. Set gripper target position and control gripper motion
         self.get_logger().info(f"Set gripper motion ratio: {position}")
+        
+        # Critical: Synchronize state before gripper motion (same as move_to_joint_configuration)
+        # Fix: "Found empty JointState message" and timestamp validation errors
+        try:
+            self._ensure_start_state_current()
+        except Exception as e:
+            self.get_logger().warn(f"⚠️  Gripper state synchronization failed: {e}")
 
         try:
             # --- Diagnostic: check whether gripper action servers are available ---
