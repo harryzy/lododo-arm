@@ -1061,7 +1061,17 @@ class ArmPlanningPyNode(Node):
             position=position, orientation=quaternion, cartesian=cartesian, wait=wait
         )
 
-    def control_gripper(self, position: float = 0.0, timeout: float = 8.0):
+    def control_gripper(self, position: float = 0.0, timeout: float = 8.0) -> bool:
+        """
+        Control gripper position
+        
+        Args:
+            position: Gripper position (0.0=open, 1.0=closed)
+            timeout: Maximum wait time in seconds
+            
+        Returns:
+            bool: True if gripper command succeeded, False otherwise
+        """
         # 4. Set gripper target position and control gripper motion
         self.get_logger().info(f"Set gripper motion ratio: {position}")
         
@@ -1072,6 +1082,9 @@ class ArmPlanningPyNode(Node):
         except Exception as e:
             self.get_logger().warn(f"⚠️  Gripper state synchronization failed: {e}")
 
+        # Track execution success
+        execution_success = [True]  # Use list to allow modification in nested function
+        
         try:
             # --- Diagnostic: check whether gripper action servers are available ---
             try:
@@ -1116,7 +1129,7 @@ class ArmPlanningPyNode(Node):
                 self.gripper_interface.move_to_position(t_position)
         except Exception as e:
             self.get_logger().error(f"Failed to send gripper command: {e}")
-            return
+            return False
 
         # Use separate thread to execute blocking wait and record warning after timeout
         def _wait_exec():
@@ -1127,6 +1140,7 @@ class ArmPlanningPyNode(Node):
                     self.get_logger().warn(
                         "gripper interface could not be determined before waiting; no active action server?"
                     )
+                    execution_success[0] = False
                     return
 
                 ok = self.gripper_interface.wait_until_executed()
@@ -1134,11 +1148,13 @@ class ArmPlanningPyNode(Node):
                     self.get_logger().warn(
                         "gripper wait_until_executed returned False (failed or timed out on server side)"
                     )
+                    execution_success[0] = False
             except Exception as ex:
                 try:
                     self.get_logger().warn(
                         f"gripper wait_until_executed threw exception: {ex}"
                     )
+                    execution_success[0] = False
                 except Exception:
                     pass
 
@@ -1149,9 +1165,12 @@ class ArmPlanningPyNode(Node):
             self.get_logger().warn(
                 f"Gripper command waiting timeout ({timeout}s)，Possibly controller did not respond or action name does not match"
             )
+            execution_success[0] = False
             # Do not crash directly, return and continue; can choose to retry or report error
         else:
             self.get_logger().debug("Gripper command execution complete (or already confirmed)")
+        
+        return execution_success[0]
 
     def shutdown(self):
         self.wait_for_joint_states()

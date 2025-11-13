@@ -293,14 +293,30 @@ class ArmGrasper(ArmPlanningPyNode):
         self._sleep_with_spin(0.5)
         return True
 
-    def _gripper_control(self, close: bool):
-        """Gripper control"""
-        if close:
-            self.control_gripper(position=1.0)  # Close gripper
-            self.is_grasped = True
-        else:
-            self.control_gripper(position=0.0)  # Open gripper
-            self.is_grasped = False
+    def _gripper_control(self, close: bool) -> bool:
+        """
+        Gripper control
+        
+        Returns:
+            bool: True if gripper command succeeded, False otherwise
+        """
+        try:
+            result = self.control_gripper(position=1.0 if close else 0.0)
+            
+            # Check if control_gripper returned False (indicating failure)
+            if result is False:
+                return False
+            
+            # Update grasp state
+            if close:
+                self.is_grasped = True
+            else:
+                self.is_grasped = False
+            
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Gripper control exception: {e}")
+            return False
 
     def _apply_position_offset(self, pose: Pose, offset: list[float]) -> Pose:
         """Position offset compensation (collision avoidance)"""

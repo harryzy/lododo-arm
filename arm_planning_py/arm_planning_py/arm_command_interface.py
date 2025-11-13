@@ -194,7 +194,7 @@ class ArmCommandInterface(Node):
             
             # Step 2: Execute grasp and lift
             self.get_logger().info("Step 2: Grasp object and lift...")
-            grasp_success = self.yolo.grasp_and_lift(target_pose)
+            grasp_success = self.yolo.grasp_and_lift(target_pose, target_info=target)
             
             if not grasp_success:
                 self.get_logger().warn("Grasp failed, task terminated")
@@ -736,7 +736,7 @@ class ArmCommandInterface(Node):
             
             # Step 2: Execute grasp and lift
             self.get_logger().info("Step 2: Grasp object and lift...")
-            grasp_success = self.yolo.grasp_and_lift(target_pose)
+            grasp_success = self.yolo.grasp_and_lift(target_pose, target_info=target)
             
             if not grasp_success:
                 self.get_logger().warn("Grasp failed, task terminated")

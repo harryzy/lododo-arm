@@ -12,6 +12,7 @@ import math
 import tf_transformations
 from .arm_grasper import ExecutionMode, ArmGrasper, ArmState
 from .robots import lododo_arm
+from moveit_msgs.msg import CollisionObject
 
 try:
     from .robots.lododo_arm import init_scan_pose as _init_scan_pose
@@ -38,6 +39,11 @@ class YoloDetectionNode(ArmGrasper):
             String, "/detection_request", 10
         )
 
+        # Publisher for removing collision objects
+        self._collision_object_pub = self.create_publisher(
+            CollisionObject, "/collision_object", 10
+        )
+
         # When executing scan, cb only writes to self._scan_result, avoiding triggering grasp workflow
         self._scan_mode = False
         self._scan_result = None
@@ -51,6 +57,24 @@ class YoloDetectionNode(ArmGrasper):
     def get_scan_result(self):
         """Get scan result cache."""
         return self._scan_result
+
+    def remove_collision_object(self, object_name: str = "detected_object"):
+        """
+        Remove collision object from MoveIt planning scene
+        
+        Args:
+            object_name: Name of the collision object to remove
+        """
+        msg = CollisionObject()
+        msg.header.frame_id = "world"
+        msg.id = object_name
+        msg.operation = CollisionObject.REMOVE
+        
+        self._collision_object_pub.publish(msg)
+        self.get_logger().info(f"🗑️  Removing collision object: {object_name}")
+        
+        # Wait briefly for MoveIt to process the message
+        time.sleep(0.1)
 
     def trigger_detection(self, site_id: str = "front"):
         """
@@ -753,12 +777,13 @@ class YoloDetectionNode(ArmGrasper):
 
         return True
 
-    def grasp_and_lift(self, grasp_pose: Pose, lift_height: float = 0.15) -> bool:
+    def grasp_and_lift(self, grasp_pose: Pose, lift_height: float = 0.15, target_info: Dict = None) -> bool:
         """
         Grasp object and lift to specified height
         
         :param grasp_pose: object grasp pose
         :param lift_height: Lift height (meters), default 15cm
+        :param target_info: Target object info dict (with class_id and label for collision object removal)
         :return: successfulreturnTrue，failedreturnFalse
         """
         try:
@@ -799,9 +824,38 @@ class YoloDetectionNode(ArmGrasper):
                 return False
             self._sleep_with_spin(1.5)  # Increased from 1.0 for stability
             
+            # 🔧 Remove object from planning scene before closing gripper to avoid collision
+            self.get_logger().info("Remove target object from planning scene...")
+            try:
+                # Construct collision object name with class and label info
+                if target_info and "class_id" in target_info and "label" in target_info:
+                    object_name = f"detected_object|class={target_info['class_id']}|label={target_info['label']}"
+                    self.get_logger().info(f"Removing collision object: {object_name}")
+                else:
+                    object_name = "detected_object"
+                    self.get_logger().warn("No target_info provided, using default object name")
+                
+                self.remove_collision_object(object_name=object_name)
+                # Wait for scene update
+                self._sleep_with_spin(0.5)
+            except Exception as e:
+                self.get_logger().warn(f"Failed to remove object from scene: {e}")
+            
+            # Ensure joint_state is fresh before gripper control
+            # MoveIt needs recent joint_state (< 1s old) for trajectory validation
+            self.get_logger().info("Ensuring joint_state is fresh for gripper control...")
+            try:
+                self._ensure_start_state_current()
+            except Exception as e:
+                self.get_logger().warn(f"State synchronization warning: {e}")
+            
             # Close gripper
             self.get_logger().info("Close gripper...")
-            self._gripper_control(close=True)
+            gripper_success = self._gripper_control(close=True)
+            if not gripper_success:
+                self.get_logger().error("❌ Failed to close gripper")
+                return False
+            
             self.is_grasped = True
             self._sleep_with_spin(2.0)
             

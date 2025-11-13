@@ -52,6 +52,17 @@ class TriangulationNode(Node):
     def __init__(self):
         super().__init__('triangulation_node')
         
+        # 🎯 DATA-DRIVEN CAMERA CALIBRATION PARAMETERS (2025-11-12)
+        # These parameters were calculated by reverse engineering from ground truth measurements
+        # Calibration point: Object at X=0.31m, Y=0.0m, Z=0.025m (base_link frame)
+        # Method: Optimization using actual object position vs measured camera coordinates
+        # These values override TF transform when use_calibrated_camera_params=True
+        self.declare_parameter('use_calibrated_camera_params', True)  # Use data-driven calibration
+        self.declare_parameter('calibrated_pitch_angle', 97.75)  # Camera pitch angle (degrees) - reverse engineered
+        self.declare_parameter('calibrated_translation_x', -0.2745)  # Camera to base_link translation X (meters)
+        self.declare_parameter('calibrated_translation_y', -0.0080)  # Camera to base_link translation Y (meters)
+        self.declare_parameter('calibrated_translation_z', 0.1055)   # Camera to base_link translation Z (meters)
+        
         # Declare parameters
         # Note: 'baseline' is a GLOBAL parameter (defined in /** section of yaml)
         #       but still needs to be declared to be accessible in the node
@@ -108,6 +119,38 @@ class TriangulationNode(Node):
         self.iou_threshold = self.get_parameter('iou_threshold').value
         self.pixel_uncertainty = self.get_parameter('pixel_uncertainty').value
         
+        # Read data-driven camera calibration parameters
+        self.use_calibrated_camera_params = self.get_parameter('use_calibrated_camera_params').value
+        self.calibrated_pitch_angle = self.get_parameter('calibrated_pitch_angle').value
+        self.calibrated_translation_x = self.get_parameter('calibrated_translation_x').value
+        self.calibrated_translation_y = self.get_parameter('calibrated_translation_y').value
+        self.calibrated_translation_z = self.get_parameter('calibrated_translation_z').value
+        
+        # Pre-compute calibrated rotation matrix (Y-axis rotation / pitch)
+        import math
+        pitch_rad = math.radians(self.calibrated_pitch_angle)
+        c, s = math.cos(pitch_rad), math.sin(pitch_rad)
+        self.calibrated_rotation_matrix = np.array([
+            [c, 0.0, s],
+            [0.0, 1.0, 0.0],
+            [-s, 0.0, c]
+        ])
+        self.calibrated_translation = np.array([
+            self.calibrated_translation_x,
+            self.calibrated_translation_y,
+            self.calibrated_translation_z
+        ])
+        
+        if self.use_calibrated_camera_params:
+            self.get_logger().info(
+                f"🎯 Using data-driven camera calibration:\n"
+                f"   Pitch angle: {self.calibrated_pitch_angle:.2f}°\n"
+                f"   Translation: [{self.calibrated_translation_x:.4f}, "
+                f"{self.calibrated_translation_y:.4f}, {self.calibrated_translation_z:.4f}]m\n"
+                f"   📍 Calibrated from: Object at X=0.31m, Y=0.0m, Z=0.025m (base_link)\n"
+                f"   ⚠️  Hardware-dependent: Re-calibrate if camera mount changes!"
+            )
+        
         # Matching threshold parameters
         self.declare_parameter('class_mismatch_score_threshold', 0.20)
         self.declare_parameter('same_class_score_threshold', 0.40)
@@ -155,7 +198,6 @@ class TriangulationNode(Node):
         angle_rad = math.radians(angle_deg)
         
         self.camera_radius = camera_radius  # Save camera radius (for baseline calculation)
-        self.y_compensation_radius = camera_radius * y_compensation_factor  # Auto-calculate Y compensation radius
         self.rotation_angle = angle_rad      # Save rotation angle (radians)
         self.rotation_angle_deg = angle_deg  # Save rotation angle (degrees)
         
@@ -166,8 +208,6 @@ class TriangulationNode(Node):
             f"📐 Rotating stereo vision parameters:\n"
             f"   Rotation angle = {angle_deg:.1f}°\n"
             f"   Camera radius = {camera_radius:.3f}m (physical measurement)\n"
-            f"   Y compensation factor = {y_compensation_factor:.3f} (calibrated)\n"
-            f"   Y compensation radius = {self.y_compensation_radius:.3f}m (auto-calculated)\n"
             f"   Effective baseline = {self.baseline:.3f}m (for error estimation only)\n"
             f"   Depth calibration factor = {self.depth_calibration_factor:.3f} "
             f"{'(calibrated)' if self.depth_calibration_factor != 1.0 else '(uncalibrated)'}"
@@ -777,13 +817,11 @@ class TriangulationNode(Node):
         w1, h1 = det1.bbox_width, det1.bbox_height
         
         for det2 in detections2:
-            # Allow different classes, but require stricter position and size matching
-            class_mismatch = (det2.class_id != det1.class_id)
+            # 🎯 GEOMETRY-BASED MATCHING: Use bbox size and position, not class labels
+            # YOLO class predictions are unreliable (same object → different classes across views)
+            # Physical geometry (size, position) is much more stable
             
-            if class_mismatch:
-                self.get_logger().debug(
-                    f"      Class difference detected: view1={det1.class_name}, view2={det2.class_name} (strict matching required)"
-                )
+            class_mismatch = (det2.class_id != det1.class_id)
             
             # Calculate IoU
             iou = self.calculate_iou(det1.bbox, det2.bbox)
@@ -793,58 +831,66 @@ class TriangulationNode(Node):
             w2, h2 = det2.bbox_width, det2.bbox_height
             center_dist = np.sqrt((u1 - u2)**2 + (v1 - v2)**2)
             
-            # Calculate size similarity
-            size1 = w1 * h1
-            size2 = w2 * h2
-            size_ratio = min(size1, size2) / max(size1, size2) if max(size1, size2) > 0 else 0
+            # Calculate bbox size similarity (width and height separately for better accuracy)
+            width_ratio = min(w1, w2) / max(w1, w2) if max(w1, w2) > 0 else 0
+            height_ratio = min(h1, h2) / max(h1, h2) if max(h1, h2) > 0 else 0
+            size_similarity = (width_ratio + height_ratio) / 2  # Average of width and height ratios
             
-            # If classes differ, require stricter size matching
-            if class_mismatch and size_ratio < 0.6:
-                # Size difference >40%, likely different objects, skip
+            # 🎯 SIZE FILTER: Require bbox dimensions within 10% tolerance
+            # If bbox sizes differ by >10%, likely different objects (even if same class)
+            SIZE_TOLERANCE = 0.10  # 10% tolerance
+            if size_similarity < (1.0 - SIZE_TOLERANCE):
                 self.get_logger().debug(
-                    f"      Skip: different class and large size difference (size_ratio={size_ratio:.2f} < 0.6)"
+                    f"      Skip {det2.class_name}: bbox size mismatch "
+                    f"(w_ratio={width_ratio:.2f}, h_ratio={height_ratio:.2f}, "
+                    f"similarity={size_similarity:.2f} < {1.0-SIZE_TOLERANCE:.2f})"
                 )
                 continue
             
-            # Hybrid scoring strategy
+            # 🎯 GEOMETRY-BASED SCORING: Prioritize size and position similarity
+            # IoU is less reliable for rotated views, use center distance + size similarity
             if iou > self.iou_threshold:
                 # IoU match successful (large objects/small angle changes)
                 score = iou
-                method = f"IoU={iou:.3f}"
+                method = f"IoU={iou:.3f}, Size={size_similarity:.2f}"
             else:
                 # IoU too low, use center distance + size similarity (small objects/large angle changes)
                 # Center distance threshold: 50% of image diagonal
                 max_center_dist = 320  # 640x480 image, allow 50% diagonal distance
                 center_score = max(0, 1 - center_dist / max_center_dist)
                 
-                # Combined score: center distance weight 0.7, size similarity weight 0.3
-                score = center_score * 0.7 + size_ratio * 0.3
-                method = f"Center={center_dist:.1f}px, Size={size_ratio:.2f}, Score={score:.3f}"
+                # Combined score: center distance weight 0.5, size similarity weight 0.5
+                # Size similarity is now more important since we pre-filtered by 10% tolerance
+                score = center_score * 0.5 + size_similarity * 0.5
+                method = f"Center={center_dist:.1f}px, Size={size_similarity:.2f}, Score={score:.3f}"
                 
-                # If classes differ, use stricter threshold (configurable)
-                min_score = self.class_mismatch_score_threshold if class_mismatch else self.same_class_score_threshold
+                # Apply minimum score threshold (same for both same/different class now)
+                min_score = self.same_class_score_threshold
                 if score < min_score:
                     score = 0
             
-            # Output candidate info including size similarity
+            # Output candidate info
             candidate_info = f"{det2.class_name}, {method}"
             if class_mismatch:
-                candidate_info += f" [different class, size_similarity={size_ratio:.2f}]"
+                candidate_info += f" [class mismatch: {det1.class_name}→{det2.class_name}]"
             
             self.get_logger().debug(f"      Candidate: {candidate_info}")
             
+            # 🎯 SIMPLE BEST-MATCH: Choose highest geometry score, ignore class labels
+            # Class labels are unreliable, bbox geometry (size + position) is what matters
             if score > best_score:
                 best_score = score
                 best_match = det2
                 matching_method = method
         
         if best_match is not None:
+            class_match_str = "✅ same class" if best_match.class_id == det1.class_id else "⚠️ class mismatch"
             self.get_logger().debug(
-                f"      ✅ Match found: {best_match.class_name}, {matching_method}"
+                f"      ✅ Best match: {best_match.class_name} ({class_match_str}), {matching_method}, score={best_score:.3f}"
             )
         else:
             self.get_logger().debug(
-                f"      ❌ No match found (best_score={best_score:.3f})"
+                f"      ❌ No match found (all candidates filtered or below threshold)"
             )
         
         return best_match
@@ -935,12 +981,29 @@ class TriangulationNode(Node):
                 )
             else:
                 # No true cubes, but have candidates (edge length and position OK)
-                # Select highest scoring candidate
-                best_cube = max(cube_candidates, key=lambda x: x[1])
+                # 🎯 IMPROVED: Prioritize objects with X in reasonable range (0.15-0.45m)
+                # This filters out false matches from wrong view pairs
+                def selection_score(candidate):
+                    obj, cube_score, is_cube = candidate
+                    x_pos = obj.position.x
+                    # Ideal X range for cube detection: 0.15-0.45m
+                    # Give bonus for being in this range
+                    if 0.15 <= x_pos <= 0.45:
+                        x_bonus = 2.0  # Strong preference for reasonable X
+                    elif 0.10 <= x_pos <= 0.50:
+                        x_bonus = 1.0  # Acceptable range
+                    else:
+                        x_bonus = 0.0  # Out of reasonable range (likely wrong match)
+                    
+                    return cube_score + x_bonus
+                
+                best_cube = max(cube_candidates, key=selection_score)
                 best_obj, best_score, is_best_cube = best_cube
+                final_score = selection_score(best_cube)
+                
                 self.get_logger().info(
-                    f"   🎯 Selected best candidate (low cube score, but dimensions/position suitable): {best_obj.class_name}\n"
-                    f"      Score={best_score:.3f} (is_cube=False)\n"
+                    f"   🎯 Selected best candidate (X-position prioritized): {best_obj.class_name}\n"
+                    f"      Cube score={best_score:.3f}, Final score={final_score:.3f} (is_cube=False)\n"
                     f"      Dimensions=[{best_obj.dimensions.x*100:.1f}, "
                     f"{best_obj.dimensions.y*100:.1f}, {best_obj.dimensions.z*100:.1f}]cm\n"
                     f"      Position=[{best_obj.position.x:.3f}, "
@@ -1228,10 +1291,10 @@ class TriangulationNode(Node):
                 # Project 2D corners to 3D (camera coordinate system)
                 corners_3d_cam = []
                 for x_n, y_n in corners_2d:
-                    # 🔧 CRITICAL FIX: Use depth_raw for X/Y projection, use depth (calibrated) for Z
-                    # Reason: depth_calibration_factor only corrects depth measurement systematic error
-                    #         It should not affect the geometric relationship of X/Y coordinates
-                    point_cam = np.array([x_n * depth_raw, y_n * depth_raw, depth])
+                    # 🎯 FIXED (2025-11-12): Use calibrated depth for ALL axes
+                    # Ensures object dimensions scale uniformly with depth_calibration_factor
+                    # This maintains geometric consistency across different object distances
+                    point_cam = np.array([x_n * depth, y_n * depth, depth])
                     corners_3d_cam.append(point_cam)
                 
                 self.get_logger().debug(f"   🔧 3D corners (camera frame): {len(corners_3d_cam)} points")
@@ -1400,17 +1463,19 @@ class TriangulationNode(Node):
         yn = (v1_center - cy) / fy
         
         # 3D coordinates (camera coordinate system)
-        # 🔧 CRITICAL FIX: Use depth_raw for X/Y projection, use depth (calibrated) for Z
-        # Reason: depth_calibration_factor corrects systematic depth measurement error,
-        #         but X/Y geometric projection should use the same scale as disparity-based triangulation
-        point_cam_array = np.array([xn * depth_raw, yn * depth_raw, depth])
+        # 🎯 FIXED (2025-11-12): Use calibrated depth for ALL axes (X/Y/Z)
+        # Reason: depth_calibration_factor scales the entire 3D position (radial distance from camera)
+        #         Using depth_raw for X/Y but depth for Z causes inconsistent scaling
+        #         Result: Position accuracy becomes distance-dependent (only accurate at calibration point)
+        # Correct approach: Uniform scaling ensures accuracy across all distances
+        point_cam_array = np.array([xn * depth, yn * depth, depth])
         
         self.get_logger().info(
             f"   🎯 3D position calculation details:\n"
             f"      bbox center: u={u1_center:.1f}, v={v1_center:.1f}\n"
             f"      Image center: cx={cx:.1f}, cy={cy:.1f}\n"
             f"      Normalized coordinates: xn={xn:.4f}, yn={yn:.4f}\n"
-            f"      Depth: depth={depth:.3f}m\n"
+            f"      Depth (raw): {depth_raw:.3f}m, Depth (calibrated): {depth:.3f}m\n"
             f"      Camera coordinates: point_cam=[{point_cam_array[0]:.3f}, {point_cam_array[1]:.3f}, {point_cam_array[2]:.3f}]m"
         )
         
@@ -1436,46 +1501,63 @@ class TriangulationNode(Node):
                 )
                 return None
         
-        # Use obtained TF transform
+        # Use obtained TF transform (or calibrated parameters)
         try:
-            # Create PointStamped message
-            point_stamped = PointStamped()
-            point_stamped.header.frame_id = camera_frame_real
-            point_stamped.header.stamp = self.get_clock().now().to_msg()
-            point_stamped.point.x = point_cam_array[0]
-            point_stamped.point.y = point_cam_array[1]
-            point_stamped.point.z = point_cam_array[2]
-            
-            # Use TF2 transform
-            point_transformed = tf2_geometry_msgs.do_transform_point(
-                point_stamped, 
-                tf_transform
-            )
-            
-            position_base = np.array([
-                point_transformed.point.x,
-                point_transformed.point.y,
-                point_transformed.point.z
-            ])
-            
-            # Manual TF transform verification (for debugging)
-            from scipy.spatial.transform import Rotation
-            quat = [
-                tf_transform.transform.rotation.x,
-                tf_transform.transform.rotation.y,
-                tf_transform.transform.rotation.z,
-                tf_transform.transform.rotation.w
-            ]
-            rot = Rotation.from_quat(quat)
-            rot_matrix = rot.as_matrix()
-            t_vec = np.array([
-                tf_transform.transform.translation.x,
-                tf_transform.transform.translation.y,
-                tf_transform.transform.translation.z
-            ])
-            
-            # Manual calculation: point_base = R @ point_cam + T
-            point_base_manual = rot_matrix @ point_cam_array + t_vec
+            # 🎯 Use data-driven calibrated camera parameters if enabled
+            if self.use_calibrated_camera_params:
+                # Use pre-computed calibrated rotation matrix and translation
+                rot_matrix = self.calibrated_rotation_matrix
+                t_vec = self.calibrated_translation
+                
+                # Manual calculation: point_base = R @ point_cam + T
+                position_base = rot_matrix @ point_cam_array + t_vec
+                point_base_manual = position_base  # Same calculation
+                
+                self.get_logger().debug(
+                    f"   🎯 Using CALIBRATED camera parameters:\n"
+                    f"      Pitch: {self.calibrated_pitch_angle:.2f}°\n"
+                    f"      Translation: [{t_vec[0]:.4f}, {t_vec[1]:.4f}, {t_vec[2]:.4f}]m"
+                )
+            else:
+                # Use TF2 transform from ROS (original behavior)
+                # Create PointStamped message
+                point_stamped = PointStamped()
+                point_stamped.header.frame_id = camera_frame_real
+                point_stamped.header.stamp = self.get_clock().now().to_msg()
+                point_stamped.point.x = point_cam_array[0]
+                point_stamped.point.y = point_cam_array[1]
+                point_stamped.point.z = point_cam_array[2]
+                
+                # Use TF2 transform
+                point_transformed = tf2_geometry_msgs.do_transform_point(
+                    point_stamped, 
+                    tf_transform
+                )
+                
+                position_base = np.array([
+                    point_transformed.point.x,
+                    point_transformed.point.y,
+                    point_transformed.point.z
+                ])
+                
+                # Manual TF transform verification (for debugging)
+                from scipy.spatial.transform import Rotation
+                quat = [
+                    tf_transform.transform.rotation.x,
+                    tf_transform.transform.rotation.y,
+                    tf_transform.transform.rotation.z,
+                    tf_transform.transform.rotation.w
+                ]
+                rot = Rotation.from_quat(quat)
+                rot_matrix = rot.as_matrix()
+                t_vec = np.array([
+                    tf_transform.transform.translation.x,
+                    tf_transform.transform.translation.y,
+                    tf_transform.transform.translation.z
+                ])
+                
+                # Manual calculation: point_base = R @ point_cam + T
+                point_base_manual = rot_matrix @ point_cam_array + t_vec
             
             # Output current joint states (for debugging)
             joint_info = "Unknown"
@@ -1502,55 +1584,14 @@ class TriangulationNode(Node):
                 except Exception as e:
                     joint_info = f"Parse failed: {e}"
             
-            # Apply position compensation (compensate URDF vs actual installation deviation)
-            # 🔧 POSE-DEPENDENT COMPENSATION: Dynamically calculate Y compensation based on joint1 angle
-            #    When joint1 rotates, camera rotates around Z-axis, causing systematic Y offset
-            #    From test data analysis:
-            #      joint1=+14.6° → Y_raw=-5.41cm → need correction=+5.41cm
-            #      joint1=-14.6° → Y_raw=+6.87cm → need correction=-6.87cm
-            #    Pattern: Y_raw ≈ -r×sin(θ), so correction = +r×sin(θ) to cancel it out
-            #
-            # CRITICAL FIX: For view2+view3 pairing, use average angle (0°) instead of current joint1!
+            # Apply position compensation (user manual fine-tuning only)
+            # 🎯 SIMPLIFIED: With data-driven camera calibration, pose-dependent auto-compensation is no longer needed
+            #    The calibrated camera parameters already account for the camera's actual position and orientation
+            #    Users can fine-tune using position_correction_x/y/z parameters if needed
             
             dynamic_correction_x = 0.0
             dynamic_correction_y = 0.0
             dynamic_correction_z = 0.0
-            
-            # Determine effective joint1 angle based on view pair
-            effective_joint1_rad = 0.0
-            effective_joint1_deg = 0.0
-            
-            if self.current_view_pair:
-                view1_name, view2_name = self.current_view_pair
-                
-                # For view2+view3 pair, use 0° (average of -15° and +15°)
-                if view1_name == "view2" and view2_name == "view3":
-                    effective_joint1_rad = 0.0
-                    effective_joint1_deg = 0.0
-                    self.get_logger().debug(
-                        f"   🔧 VIEW2+VIEW3 pair detected → Using average angle: joint1=0° for Y compensation"
-                    )
-                # For view1+view2 or view1+view3, use current joint1 angle
-                elif joint_angles_dict and 'joint1' in joint_angles_dict:
-                    effective_joint1_rad = joint_angles_dict['joint1']['rad']
-                    effective_joint1_deg = joint_angles_dict['joint1']['deg']
-            elif joint_angles_dict and 'joint1' in joint_angles_dict:
-                # Fallback: use current joint1
-                effective_joint1_rad = joint_angles_dict['joint1']['rad']
-                effective_joint1_deg = joint_angles_dict['joint1']['deg']
-            
-            # Calculate dynamic Y compensation using effective joint1 angle
-            # Positive sign because Y_raw ≈ -r×sin(θ), we add +r×sin(θ) to cancel
-            # Use y_compensation_radius (NOT camera_radius) to avoid affecting baseline calculation
-            dynamic_correction_y = self.y_compensation_radius * math.sin(effective_joint1_rad)
-            
-            self.get_logger().debug(
-                f"   🔧 Pose-dependent compensation: "
-                f"view_pair={self.current_view_pair}, "
-                f"effective_joint1={effective_joint1_deg:.1f}° → "
-                f"Y_correction={dynamic_correction_y*100:.2f}cm "
-                f"(y_compensation_radius={self.y_compensation_radius:.3f}m)"
-            )
             
             # Apply total compensation: dynamic + user fine-tune
             position_base_corrected = [
@@ -1559,11 +1600,15 @@ class TriangulationNode(Node):
                 position_base[2] + dynamic_correction_z + self.position_correction_z
             ]
             
+            # Prepare transform source label
+            transform_source = "🎯 CALIBRATED (data-driven)" if self.use_calibrated_camera_params else "📡 TF2 (ROS)"
+            
             self.get_logger().info(
                 f"   🌍 Coordinate transform result:\n"
                 f"      🤖 Current joint angles: {joint_info}\n"
+                f"      📍 Transform source: {transform_source}\n"
                 f"      \n"
-                f"      TF2 result: [{position_base[0]:.3f}, {position_base[1]:.3f}, {position_base[2]:.3f}]m\n"
+                f"      Position (raw): [{position_base[0]:.3f}, {position_base[1]:.3f}, {position_base[2]:.3f}]m\n"
                 f"      Manual calculation: [{point_base_manual[0]:.3f}, {point_base_manual[1]:.3f}, {point_base_manual[2]:.3f}]m\n"
                 f"      Pose-dependent compensation: X+{dynamic_correction_x:.4f}m, Y+{dynamic_correction_y:.4f}m, Z+{dynamic_correction_z:.4f}m\n"
                 f"      User fine-tune: X+{self.position_correction_x:.4f}m, Y+{self.position_correction_y:.4f}m, Z+{self.position_correction_z:.4f}m\n"

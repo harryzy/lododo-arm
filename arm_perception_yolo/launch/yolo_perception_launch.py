@@ -42,7 +42,7 @@ def generate_launch_description():
     # Launch arguments
     model_path_arg = DeclareLaunchArgument(
         'model_path',
-        default_value='yolov8x.pt',  # 🚀 Use YOLOv8x highest precision model
+        default_value='yolov8m.pt',  # 🚀 Use YOLOv8m model
         description='YOLO model path (yolov8n/s/m/l/x.pt)'
     )
     
