@@ -1,0 +1,167 @@
+/**:
+  ros__parameters:
+    # ============================================================================
+    # Detection Mode Parameters
+    # ============================================================================
+    
+    # Detection mode: "continuous" (process every frame) or "triggered" (on-demand)
+    # Changed to 'continuous' for stable message handling (like YOLO mode)
+    detection_mode: 'continuous'  # continuous | triggered
+    trigger_timeout_sec: 20.0     # Timeout for triggered mode (seconds) - increased to accommodate low-frame-rate cameras
+    
+    # ============================================================================
+    # Camera Calibration Parameters
+    # ============================================================================
+    
+    # Use calibrated parameters from config file or rely on TF/topic
+    # CRITICAL: Set to true to use calibrated parameters defined here.
+    # If false, parameters may be overridden by the /camera/camera_info topic.
+    use_calibrated_camera_params: true
+    
+    # Camera intrinsics (from camera calibration)
+    # Note: These values can be overridden by the /camera/camera_info topic; this section serves as a backup.
+    # Calibration date: 2025-11-19 (single-point automatic calibration, second run)
+    # Resolution: 640x480
+    # Method: Grid search + single-point optimization
+    # Calibration notes:
+    #   Point1: True(0.31,0.0) pixel=(310,260.5) -> Predicted(0.310,-0.001) error 1.0 mm
+    #   RMS error: 0.96 mm (within ±2 cm requirement)
+    # Key finding: pitch = 174° (not 114°)
+    camera_matrix:
+      fx: 572.70774
+      fy: 612.22574
+      cx: 330.25436
+      cy: 275.0
+    
+    distortion_coeffs: [0.031724, 0.050556, -0.018738, -0.041414, 0.0]
+    
+    # Camera extrinsics - dual-point optimized results (balancing near/far accuracy)
+    # Test points: X=0.31 m (error 9.5 mm), X=0.34 m (error 19.7 mm)
+    # Average error: 14.6 mm (within ±2 cm requirement)
+    # Updated: 2025-11-19 (4th iteration - dual-point balance)
+    # Note: Theoretical camera_x differs from measured value by ~0.05 m; this may be due to intrinsics or TF frame inconsistencies.
+    camera_pose:
+      translation:
+        x: 0.306    # Camera is 30.6 cm forward of base_link (dual-point optimized)
+        y: 0.00     # No lateral offset in base_link Y direction
+        z: 0.0985
+      rotation:
+        pitch: 174.20  # Pitch angle 174.2° (dual-point optimized; measured approx. 120° but algorithm reports 174°)
+        roll: 0.0
+        yaw: 0.0    # ============================================================================
+    # ============================================================================
+    # Planar constraint parameters
+    # ============================================================================
+    
+    # Table height (Z coordinate in base_link frame)
+    table_height: 0.0  # meters; assumes table is co-planar with base_link by default
+
+    # Table height offset used to compensate measurement errors
+    table_height_offset: 0.002  # meters; positive or negative adjustments allowed
+    
+    # ============================================================================
+    # Cube Detection Parameters
+    # ============================================================================
+    
+    cube_detection:
+      # Target cube size
+      expected_size: 0.050  # 5 cm edge length (meters)
+      size_tolerance: 0.015  # ±1.5 cm tolerance (meters)
+      
+      # Geometric thresholds
+      # Note: These values are tuned for 640x480 resolution
+      geometry_thresholds:
+        min_area: 500         # Minimum area (pixels^2), ~22x22; lower to detect distant small cubes
+        max_area: 25000       # Maximum area (pixels^2), ~158x158; increase to include very close cubes
+        min_aspect_ratio: 0.60   # Minimum aspect ratio (relaxed to tolerate perspective)
+        max_aspect_ratio: 1.50   # Maximum aspect ratio (relaxed to tolerate perspective)
+        min_solidity: 0.80       # Minimum solidity (lowered to tolerate imperfect edges)
+        expected_vertices: 4     # Expected number of contour vertices
+        vertex_tolerance: 1      # Vertex count tolerance
+      
+      # Edge detection parameters
+      edge_detection:
+        use_color_segmentation: true  # Enable automatic color region segmentation
+        canny_threshold1: 30    # Canny low threshold (lower to detect more edges)
+        canny_threshold2: 100   # Canny high threshold (lower to detect more edges)
+        gaussian_blur_size: 5   # Gaussian blur kernel size
+        morph_kernel_size: 5    # Morphological kernel size (increase to connect broken edges)
+      
+      # Automatic color segmentation parameters (effective when use_color_segmentation=true)
+      color_segmentation:
+        n_colors: 8              # Number of dominant colors to extract (K-means clusters)
+        min_saturation: 20       # Minimum saturation (0-255) to filter gray/white background; lower to adapt to lighting
+        min_region_pixels: 300   # Minimum pixels for a valid color region (filters noise); lower to detect smaller targets
+        max_region_pixels: 50000 # Maximum pixels to avoid including entire background
+
+      
+      # Confidence threshold
+      min_confidence: 0.5       # Minimum accepted detection confidence (lower to accept more detections)
+    
+    # ============================================================================
+    # 3D Localization Parameters
+    # ============================================================================
+    
+    localization:
+      # Size validation
+      enable_size_validation: false  # Disabled for debugging - detected cubes may measure ~0.08-0.12 m instead of 0.05 m
+      size_validation_tolerance: 0.015  # ±1.5 cm
+      
+      # Position correction parameters
+      # Used to compensate for hardware installation offsets and fine-tune grasp positions.
+      # How it works:
+      # - `position` (JSON): Raw 3D position computed by the algorithm
+      # - `grasp_pose.position` (JSON): position + correction parameters (corrected for grasping)
+      # - `CollisionObject`: published using the corrected position
+      # Use cases:
+      # 1. Gripper offset from camera optical center
+      # 2. Robot arm installation errors
+      # 3. Fine adjustments for specific grasping requirements
+      # NOTE: Keep X and Y corrections at 0.0 to validate algorithm accuracy; Z offset is commonly used for grasp height.
+      position_correction:
+        x: 0.0   # X correction - algorithm should compute this automatically, avoid compensating unless necessary
+        y: 0.0   # Y correction - algorithm should compute this automatically, avoid compensating unless necessary
+        z: 0.03  # Z correction (meters) - grasp height offset
+      
+      # Depth range limits
+      min_depth: 0.05  # Minimum detection distance (meters) - lowered to support close-range planar detection
+      max_depth: 1.50  # Maximum detection distance (meters) - extended to 1.5 m to support planar geometry
+      
+      # Y-axis workspace range constraints
+      # Note: After auto-calibration, Y error is within ±5 mm, so strict Y constraints are not required.
+      y_min: -1.0  # Minimum Y (meters) - set to a permissive range
+      y_max: 1.0   # Maximum Y (meters) - used only to filter gross outliers
+    
+    # ============================================================================
+    # Visualization Parameters
+    # ============================================================================
+    
+    visualization:
+      enable_debug_image: true       # Publish debug image
+      enable_rviz_markers: true      # Publish RViz markers
+      marker_lifetime: 2.0           # Marker display lifetime (seconds)
+      
+      # Debug image settings
+      debug_image:
+        show_contours: true          # Show contours
+        show_bounding_boxes: true    # Show bounding boxes
+        show_confidence: true        # Show detection confidence
+        show_3d_position: true       # Show 3D coordinates
+    
+    # ============================================================================
+    # MoveIt Scene Object Parameters
+    # ============================================================================
+    
+    scene:
+      object_id: detected_cube       # Base ID for collision objects
+      publish_box: true              # Enable/disable CollisionObject publishing
+    
+    # ============================================================================
+    # Performance Parameters
+    # ============================================================================
+    
+    performance:
+      image_processing_rate: 10.0    # Image processing rate (Hz)
+      enable_multithreading: false   # Enable multithreaded processing
+      queue_size: 1                  # Message queue size
+
