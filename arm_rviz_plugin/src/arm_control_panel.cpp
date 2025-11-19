@@ -308,6 +308,13 @@ void ArmControlPanel::commandResultCallback(const std_msgs::msg::String::SharedP
   if (status == "error") {
     status_label_->setText(QString("Status: Error - %1").arg(phase));
     status_label_->setStyleSheet("QLabel { color: red; font-size: 12px; font-weight: bold; padding: 5px; }");
+  } else if (status == "ok") {
+    // 检测成功 (用于 scan_planar 等命令)
+    status_label_->setText("Status: Detection completed");
+    status_label_->setStyleSheet("QLabel { color: green; font-size: 12px; font-weight: bold; padding: 5px; }");
+  } else if (status == "no_detection") {
+    status_label_->setText("Status: No objects detected");
+    status_label_->setStyleSheet("QLabel { color: orange; font-size: 12px; font-weight: bold; padding: 5px; }");
   } else if (status == "scan_complete") {
     status_label_->setText("Status: Scan completed, preparing to grasp...");
     status_label_->setStyleSheet("QLabel { color: blue; font-size: 12px; font-weight: bold; padding: 5px; }");
@@ -317,8 +324,13 @@ void ArmControlPanel::commandResultCallback(const std_msgs::msg::String::SharedP
   } else if (status == "success") {
     status_label_->setText(QString("Status: Command completed successfully - %1").arg(phase));
     status_label_->setStyleSheet("QLabel { color: green; font-size: 12px; font-weight: bold; padding: 5px; }");
-  } else {
+  } else if (phase != "unknown") {
+    // 有phase但status未知的情况
     status_label_->setText(QString("Status: %1 - %2").arg(status).arg(phase));
+    status_label_->setStyleSheet("QLabel { color: orange; font-size: 12px; font-weight: bold; padding: 5px; }");
+  } else {
+    // status和phase都未识别
+    status_label_->setText(QString("Status: %1").arg(status));
     status_label_->setStyleSheet("QLabel { color: orange; font-size: 12px; font-weight: bold; padding: 5px; }");
   }
   
@@ -426,15 +438,23 @@ QString ArmControlPanel::generateResultSummary(const QString& json_result)
     }
   }
   
-  // 提取success
+  // 提取success (优先使用顶层的 "success" 字段)
+  // 注意: success 可能是布尔值 (true/false) 或字符串 ("true"/"false")
   QString success = "unknown";
   int successStart = json_result.indexOf("\"success\"");
   if (successStart != -1) {
     int colonPos = json_result.indexOf(":", successStart);
-    QString remaining = json_result.mid(colonPos + 1, 10);
-    if (remaining.contains("true")) {
+    // 跳过冒号后的空格，找到实际值
+    int valueStart = colonPos + 1;
+    while (valueStart < json_result.length() && (json_result[valueStart] == ' ' || json_result[valueStart] == '\n')) {
+      valueStart++;
+    }
+    QString remaining = json_result.mid(valueStart, 10).trimmed();
+    
+    // 检查布尔值 true/false 或字符串 "true"/"false"
+    if (remaining.startsWith("true") || remaining.startsWith("\"true\"")) {
       success = "✓";
-    } else if (remaining.contains("false")) {
+    } else if (remaining.startsWith("false") || remaining.startsWith("\"false\"")) {
       success = "✗";
     }
   }
@@ -443,14 +463,19 @@ QString ArmControlPanel::generateResultSummary(const QString& json_result)
   int objectCount = 0;
   QStringList objectLabels;
   
-  // 优先提取 grasp_success 字段 (用于所有命令的success状态)
+  // 如果顶层没有 success 字段，尝试提取 grasp_success 字段
   int graspSuccessStart = json_result.indexOf("\"grasp_success\"");
   if (graspSuccessStart != -1 && success == "unknown") {
     int colonPos = json_result.indexOf(":", graspSuccessStart);
-    QString remaining = json_result.mid(colonPos + 1, 10);
-    if (remaining.contains("true")) {
+    int valueStart = colonPos + 1;
+    while (valueStart < json_result.length() && (json_result[valueStart] == ' ' || json_result[valueStart] == '\n')) {
+      valueStart++;
+    }
+    QString remaining = json_result.mid(valueStart, 10).trimmed();
+    
+    if (remaining.startsWith("true") || remaining.startsWith("\"true\"")) {
       success = "✓";
-    } else if (remaining.contains("false")) {
+    } else if (remaining.startsWith("false") || remaining.startsWith("\"false\"")) {
       success = "✗";
     }
   }

@@ -16,7 +16,7 @@ from moveit_msgs.msg import CollisionObject
 class ArmCommandInterface(Node):
     """Listen to command topic, call YoloDetectionNode to execute related actions and publish results."""
 
-    def __init__(self):
+    def __init__(self, yolo_node=None):
         super().__init__("arm_command_interface")
         self.command_sub = self.create_subscription(String, "/arm_command", self.cb_command, 10)
         self.result_pub = self.create_publisher(String, "/arm_command_result", 10)
@@ -25,7 +25,7 @@ class ArmCommandInterface(Node):
         # Note: baseline and dual_view_timeout are GLOBAL parameters
         #       but still need to be declared to be accessible
         self.declare_parameter("baseline", 0.15)  # Default, will be overridden by global yaml
-        self.declare_parameter("dual_view_timeout", 10.0)  # Default, will be overridden by global yaml
+        self.declare_parameter("dual_view_timeout", 20.0)  # Default, will be overridden by global yaml
         
         self.baseline = self.get_parameter("baseline").value
         self.dual_view_timeout = self.get_parameter("dual_view_timeout").value
@@ -35,12 +35,22 @@ class ArmCommandInterface(Node):
             f"timeout={self.dual_view_timeout}s"
         )
 
-        # Internally use a YoloDetectionNode instance to execute scan/grasp
-        self.get_logger().info("Starting internal YoloDetectionNode instance...")
-        # Note: Don't start independent executor or rclpy.spin for yolo here,
-        # We will create a single executor at process level and add both nodes to avoid multi-thread spin conflicts.
-        # Use fast planning mode to be consistent with simulation
-        self.yolo = YoloDetectionNode(is_fast_robust_plan=True)
+        # Use externally created YoloDetectionNode instance (passed from main)
+        # This avoids ROS2 node name collision by ensuring yolo node is created independently
+        if yolo_node is None:
+            raise ValueError("yolo_node must be provided to ArmCommandInterface")
+        self.yolo = yolo_node
+        self.get_logger().info(f"✅ Using YoloDetectionNode: node_name={self.yolo.get_name()}, namespace={self.yolo.get_namespace()}")
+        
+        # CRITICAL FIX: Create subscription in ArmCommandInterface and forward to yolo_node.cb
+        # This avoids subscription conflict when both nodes share same rcl node
+        self._yolo_subscription = self.create_subscription(
+            String,
+            "/detected_objects_json",
+            self._forward_to_yolo_cb,
+            10
+        )
+        self.get_logger().info("✅ Created /detected_objects_json subscription in ArmCommandInterface")
         
         # Subscribe to collision_object to track scene objects
         # Note: /planning_scene is not actively published by move_group in this configuration
@@ -53,6 +63,14 @@ class ArmCommandInterface(Node):
             10
         )
         self.get_logger().info("Subscribed to /collision_object for scene object tracking")
+    
+    def _forward_to_yolo_cb(self, msg: String):
+        """Forward /detected_objects_json messages to yolo_node.cb()"""
+        self.get_logger().info(f"[FORWARD] Received message on /detected_objects_json, forwarding to yolo.cb()")
+        try:
+            self.yolo.cb(msg)
+        except Exception as e:
+            self.get_logger().error(f"[FORWARD ERROR] Failed to forward message to yolo.cb(): {e}")
     
     def _collision_object_callback(self, msg: CollisionObject):
         """Handle incoming collision objects from /collision_object topic"""
@@ -89,7 +107,8 @@ class ArmCommandInterface(Node):
         self.get_logger().info(f"Received command: {cmd}")
         if cmd == "scan_front":
             # Use tri-view intelligent scan (improve recognition rate and accuracy)
-            Thread(target=self._do_scan_front_tri_view, daemon=True).start()
+            # Thread(target=self._do_scan_front_tri_view, daemon=True).start()
+            Thread(target=self._do_scan_front_planar_view, daemon=True).start()
         elif cmd == "scan_all":
             Thread(target=self._do_scan_all_traditional, daemon=True).start()
         elif cmd == "scan_and_grasp":
@@ -100,7 +119,8 @@ class ArmCommandInterface(Node):
             Thread(target=self._do_hand_delivery_tri_view, daemon=True).start()
         elif cmd == "grasp_lift":
             # Use tri-view intelligent scan + grasp lift
-            Thread(target=self._do_grasp_lift_tri_view, daemon=True).start()
+            # Thread(target=self._do_grasp_lift_tri_view, daemon=True).start()
+            Thread(target=self._do_grasp_lift_planar, daemon=True).start()
         elif cmd == "deliver_pose":
             # Use tri-view intelligent scan + specified pose delivery
         
@@ -115,6 +135,122 @@ class ArmCommandInterface(Node):
         else:
             self.get_logger().warn(f"Unknown command: {cmd}")
             self._publish_result({"command": cmd, "status": "unknown_command"})
+    
+    def _do_grasp_lift_planar(self):
+        """Execute grasp lift task (using planar intelligent measurement)"""
+        try:
+            self.get_logger().info("🤝 Starting grasp lift task (planar mode)...")
+
+            # Step 1: Planar intelligent scan to find target object
+            self.get_logger().info("Step 1: Planar intelligent scan for target object...")
+            # baseline encoding: 0.15 represents 15 degrees, need to convert to real angle
+            
+
+            results = self._do_scan_front_planar_view()
+            
+            if not results:
+                self.get_logger().warn("Target object not found, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "scan",
+                    "method": "planar_intelligent_scan",
+                    "error": "no_object_found"
+                })
+                return
+            
+            # Select smallest object as target (using planar-specific selector)
+            target = self._select_smallest_from_planar(results)
+            
+            if not target:
+                self.get_logger().warn("Unable to select target object, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "scan",
+                    "error": "target_selection_failed"
+                })
+                return
+            
+            self.get_logger().info(
+                f"Found target object: {target.get('label')} "
+                f"(conf={target.get('confidence', 0):.2f}, "
+                f"measured={target.get('measured', False)})"
+            )
+            
+            # Extract grasp pose
+            target_pose = self._extract_grasp_pose_from_detection(target)
+            
+            if target_pose is None:
+                self.get_logger().warn("Unable to extract grasp pose, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "scan",
+                    "error": "invalid_grasp_pose"
+                })
+                return
+            
+            # Phase 1 complete: publish scan result
+            self._publish_result({
+                "command": "grasp_lift",
+                "status": "scan_complete",
+                "phase": "scan",
+                "method": "tri_view_triangulation",
+                "object": {
+                    "label": target.get("label"),
+                    "confidence": target.get("confidence"),
+                    "position": target.get("position"),
+                    "dimensions": target.get("dimensions"),
+                    "measured": target.get("measured", False),
+                    "depth_error": target.get("depth_error"),
+                    "size_error": target.get("size_error")
+                },
+                "object_pose": self._pose_to_simple(target_pose),
+                "total_objects": len(results)
+            })
+            
+            # Step 2: Execute grasp and lift
+            self.get_logger().info("Step 2: Grasp object and lift...")
+            grasp_success = self.yolo.grasp_and_lift(target_pose, target_info=target)
+            
+            if not grasp_success:
+                self.get_logger().warn("Grasp failed, task terminated")
+                self._publish_result({
+                    "command": "grasp_lift",
+                    "status": "error",
+                    "phase": "grasp",
+                    "method": "tri_view_triangulation",
+                    "error": "grasp_failed",
+                    "object": target
+                })
+                return
+            
+            # Phase 2 complete: publish grasp success result
+            self.get_logger().info("✅ Grasp and lift successful!")
+            self._publish_result({
+                "command": "grasp_lift",
+                "status": "success",
+                "phase": "grasp_complete",
+                "method": "tri_view_triangulation",
+                "object": {
+                    "label": target.get("label"),
+                    "position": target.get("position"),
+                    "dimensions": target.get("dimensions")
+                },
+                "object_pose": self._pose_to_simple(target_pose),
+                "grasp_success": True
+            })
+            
+        except Exception as e:
+            self.get_logger().error(f"Grasp lift task exception: {e}")
+            self._publish_result({
+                "command": "grasp_lift",
+                "status": "error",
+                "phase": "unknown",
+                "error": str(e)
+            })
+
 
     def _do_grasp_lift_tri_view(self):
         """Execute grasp lift task (using tri-view intelligent measurement)"""
@@ -360,6 +496,161 @@ class ArmCommandInterface(Node):
         except Exception as e:
             self.get_logger().warn(f"Publish result failed: {e}")
 
+    def _do_scan_front_planar_view(self):
+        """Front view planar scan - Single position scan using planar detection"""
+        try:
+            self.get_logger().info("🔍 Executing front view planar scan...")
+            
+            import time
+            import math
+            import rclpy
+            
+            # Clear old scan results and enable scan mode
+            # Note: With continuous detection mode, detector is always subscribed to camera
+            # We just need to set scan_mode=True and clear cache
+            self.yolo._scan_result = None
+            self.yolo.set_scan_mode(True)
+            
+            results = []
+            
+            # Move to front position (joint1 = 0°)
+            self.get_logger().info("🎥 Moving to front scan position (joint1=0°)")
+            try:
+                # Wait for joint_state available
+                self.yolo._wait_for_joint_state()
+                
+                # Synchronize state immediately before movement
+                self.yolo._ensure_start_state_current()
+                
+                # Get init_scan_pose from yolo node
+                from .yolo_detection_node import _init_scan_pose
+                if _init_scan_pose is not None:
+                    front_cfg = list(_init_scan_pose())
+                    max_abs = max(abs(a) for a in front_cfg)
+                    if max_abs > 2 * math.pi:
+                        front_cfg = [math.radians(a) for a in front_cfg]
+                    
+                    # Move to front position
+                    if not self.yolo.move_to_joint_configuration(front_cfg, description="front scan position (planar)"):
+                        self.get_logger().error("❌ Failed to move to front position")
+                        self._publish_result({
+                            "command": "scan_planar",
+                            "status": "error",
+                            "success": False,
+                            "error": "movement_failed"
+                        })
+                        self.yolo.set_scan_mode(False)
+                        return
+                    
+                    self.get_logger().info(f"✅ Moved to front position: {[f'{math.degrees(x):.1f}°' for x in front_cfg]}")
+                else:
+                    self.get_logger().error("❌ init_scan_pose not defined, cannot move to front position")
+                    self._publish_result({
+                        "command": "scan_planar",
+                        "status": "error",
+                        "success": False,
+                        "error": "init_scan_pose_undefined"
+                    })
+                    self.yolo.set_scan_mode(False)
+                    return
+                
+                # Wait for camera to stabilize
+                self.yolo._sleep_with_spin(2.0)
+            except Exception as e:
+                self.get_logger().error(f"Move to front position failed: {e}")
+                self._publish_result({
+                    "command": "scan_planar",
+                    "status": "error",
+                    "success": False,
+                    "error": str(e)
+                })
+                self.yolo.set_scan_mode(False)
+                return
+            
+            # Trigger front detection
+            self.yolo.trigger_detection("front")
+            
+            # Wait for detection result
+            self.get_logger().info(f"⏳ Waiting for planar detection result (timeout {self.dual_view_timeout}s)...")
+            start_time = time.time()
+            result = None
+            
+            while time.time() - start_time < self.dual_view_timeout:
+                if self.yolo._scan_result is not None:
+                    result = self.yolo._scan_result
+                    self.get_logger().info("✅ Planar detection complete")
+                    break
+                
+                # Use simple sleep to avoid blocking
+                time.sleep(0.1)
+            
+            self.yolo.set_scan_mode(False)
+            
+            if result is None:
+                self.get_logger().warn(f"⚠️ Planar detection timeout ({self.dual_view_timeout}s)")
+                self._publish_result({
+                    "command": "scan_planar",
+                    "status": "no_detection",
+                    "success": False,
+                    "method": "planar_detection",
+                    "total_objects": 0,
+                    "results": []
+                })
+                return
+            
+            # Extract detection results
+            raw = result.get("raw")
+            if isinstance(raw, dict):
+                detections = raw.get("detections", [])
+                results = detections  # All detected objects
+                
+                self.get_logger().info(f"📦 Planar scan result: total {len(results)} objects")
+                for i, obj in enumerate(results):
+                    self.get_logger().info(
+                        f"  [{i+1}] {obj.get('label', 'unknown')}: "
+                        f"conf={obj.get('confidence', 0):.2f}, "
+                        f"pos=({obj.get('position', {}).get('x', 0):.3f}, "
+                        f"{obj.get('position', {}).get('y', 0):.3f}, "
+                        f"{obj.get('position', {}).get('z', 0):.3f})"
+                    )
+            
+            if results:
+                self._publish_result({
+                    "command": "scan_planar",
+                    "status": "ok",
+                    "success": True,
+                    "method": "planar_detection",
+                    "total_objects": len(results),
+                    "results": results
+                })
+                return results
+            else:
+                self.get_logger().warn("Planar scan detected no objects")
+                self._publish_result({
+                    "command": "scan_planar",
+                    "status": "no_detection",
+                    "success": False,
+                    "method": "planar_detection",
+                    "total_objects": 0,
+                    "results": []
+                })
+                
+        except Exception as e:
+            self.get_logger().error(f"Planar scan failed: {e}")
+            import traceback
+            self.get_logger().error(traceback.format_exc())
+            self._publish_result({
+                "command": "scan_planar",
+                "status": "error",
+                "success": False,
+                "error": str(e)
+            })
+            # Ensure scan mode is disabled
+            try:
+                self.yolo.set_scan_mode(False)
+            except:
+                pass
+
     def _do_scan_front_tri_view(self):
         """Front view tri-view intelligent scan - Improve recognition rate and accuracy"""
         try:
@@ -539,17 +830,17 @@ class ArmCommandInterface(Node):
 
     def _select_best_target(self, results: list, target_label: str = None) -> tuple:
         """
-        Select best target from scan result。
-        
+        Select the best target from scan results.
+
         Strategy:
         1. If target_label is specified, prioritize selecting this type of object
-        2. If not specified or specified type not found, select object with smallest physical size
-        
-        Note: Since bbox_px is pixel size, it is greatly affected by object distance，Therefore need to use depth normalization
-        to estimate real physical size. Normalized size = pixel size × depth distance。
-        
+        2. If not specified or specified type not found, select the object with the smallest physical size
+
+        Note: Since bbox_px is pixel size, it is greatly affected by object distance. Therefore, depth normalization is needed
+        to estimate the real physical size. Normalized size = pixel size × depth distance.
+
         :param results: Result list returned by scan_views
-        :param target_label: Optional target label（such as "bottle", "cup", etc）
+        :param target_label: Optional target label (such as "bottle", "cup", etc)
         :return: (target_pose, view_name, detection_info) if target found, otherwise (None, None, None)
         """
         import math
@@ -675,7 +966,7 @@ class ArmCommandInterface(Node):
             )
             
             if not results:
-                self.get_logger().warn("Target object not found，task terminated")
+                self.get_logger().warn("Target object not found, task terminated")
                 self._publish_result({
                     "command": "hand_delivery",
                     "status": "error",
@@ -683,12 +974,12 @@ class ArmCommandInterface(Node):
                     "error": "no_object_found"
                 })
                 return
-            
-            # Selected smallest object as target
+
+            # Select the smallest object as target
             target = self._select_smallest_from_tri_view(results)
-            
+
             if not target:
-                self.get_logger().warn("Unable to select target object，task terminated")
+                self.get_logger().warn("Unable to select target object, task terminated")
                 self._publish_result({
                     "command": "hand_delivery",
                     "status": "error",
@@ -770,7 +1061,7 @@ class ArmCommandInterface(Node):
             hand_pose = self.yolo.wait_for_hand_detection(timeout=30.0)
             
             if hand_pose is None:
-                self.get_logger().warn("Hand not detected，task terminated")
+                self.get_logger().warn("Hand not detected, task terminated")
                 self._publish_result({
                     "command": "hand_delivery",
                     "status": "error",
@@ -822,12 +1113,46 @@ class ArmCommandInterface(Node):
                 "error": str(e)
             })
 
+    def _select_smallest_from_planar(self, results: list) -> dict:
+        """
+        Select the smallest object from planar detection results.
+
+        :param results: Result list from planar detection (contains bbox_px)
+        :return: Detection info of the smallest object, return None if none
+        """
+        if not results:
+            return None
+        
+        # If only one object, return it directly
+        if len(results) == 1:
+            return results[0]
+        
+        # Multiple objects: select by smallest bounding box area
+        smallest = None
+        smallest_area = float('inf')
+        
+        for obj in results:
+            bbox = obj.get("bbox_px")
+            if not bbox:
+                continue
+            
+            w = bbox.get("w", 0)
+            h = bbox.get("h", 0)
+            
+            if w > 0 and h > 0:
+                area = w * h
+                if area < smallest_area:
+                    smallest_area = area
+                    smallest = obj
+        
+        return smallest
+
     def _select_smallest_from_tri_view(self, results: list) -> dict:
         """
-        Select smallest object from tri-view measurement result
-        
+        Select the smallest object from tri-view measurement results.
+
         :param results: Result list returned by scan_tri_view
-        :return: Detection info of smallest object, return None if none
+        :return: Detection info of the smallest object, return None if none
         """
         import math
         
@@ -1080,9 +1405,33 @@ class ArmCommandInterface(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = None
+    yolo_node = None
     executor = None
+    
     try:
-        node = ArmCommandInterface()
+        # SOLUTION: Create YoloDetectionNode without subscription
+        # Subscription will be created by ArmCommandInterface and forwarded
+        # This avoids subscription conflict when both objects share same rcl node
+        yolo_node = YoloDetectionNode(
+            node_name="yolo_detection_node",
+            is_fast_robust_plan=True,
+            create_subscription=False  # Subscription handled by ArmCommandInterface
+        )
+        
+        # Check if node was created with correct name
+        actual_name = yolo_node.get_name()
+        if actual_name != "yolo_detection_node":
+            yolo_node.get_logger().info(
+                f"ℹ️ YoloDetectionNode shares node name '{actual_name}' with ArmCommandInterface. "
+                f"Subscription forwarding pattern is active."
+            )
+        else:
+            yolo_node.get_logger().info(f"✅ YoloDetectionNode created with name: {actual_name}")
+        
+        # Create ArmCommandInterface and pass the yolo_node to it
+        # ArmCommandInterface will create the subscription and forward messages
+        node = ArmCommandInterface(yolo_node=yolo_node)
+        node.get_logger().info(f"✅ ArmCommandInterface created with name: {node.get_name()}")
 
         # Create a SingleThreadedExecutor and add both nodes to it to avoid multiple rclpy.spin calls
         import rclpy.executors as rex
@@ -1093,7 +1442,7 @@ def main(args=None):
         executor = ExecST(context=node.context)
         executor.add_node(node)
         try:
-            executor.add_node(node.yolo)
+            executor.add_node(yolo_node)
         except Exception:
             node.get_logger().warn("Unable to add internal yolo node to executor")
 
@@ -1117,10 +1466,12 @@ def main(args=None):
             if executor is not None:
                     executor.shutdown()
                     executor.remove_node(node)
-                    executor.remove_node(node.yolo)
-            node.get_logger().info("Destroying node and exiting...")
-            if hasattr(node, "yolo") and node.yolo is not None:
-                node.yolo.destroy_node()
+                    if yolo_node is not None:
+                        executor.remove_node(yolo_node)
+            if node:
+                node.get_logger().info("Destroying node and exiting...")
+            if yolo_node is not None:
+                yolo_node.destroy_node()
             rclpy.shutdown()
         except Exception:
             pass

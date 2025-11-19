@@ -56,7 +56,7 @@
     cube_dimension_tolerance: 0.25     # 3D dimension tolerance
     
     # ⏱️ Dual-view timeout parameter (GLOBAL)
-    dual_view_timeout: 10.0     # Detection timeout for each view (seconds)
+    dual_view_timeout: 20.0     # Detection timeout for each view (seconds)
 
 # TriangulationNode parameters
 triangulation_node:

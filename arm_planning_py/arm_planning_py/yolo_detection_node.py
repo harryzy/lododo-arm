@@ -27,12 +27,20 @@ class YoloDetectionNode(ArmGrasper):
     ROS callback queue delay caused by MoveIt blocking.
     """
 
-    def __init__(self, node_name="yolo_detection_node", is_fast_robust_plan=True):
+    def __init__(self, node_name="yolo_detection_node", is_fast_robust_plan=True, create_subscription=True):
         super().__init__(node_name=node_name, is_fast_robust_plan=is_fast_robust_plan)
-        # Subscribe to JSON topic
-        self.subscription = self.create_subscription(
-            String, "/detected_objects_json", self.cb, 10
-        )
+        
+        # Subscription creation is now optional (controlled by ArmCommandInterface)
+        # When used standalone, create_subscription=True
+        # When used within ArmCommandInterface, create_subscription=False (forwarded by parent)
+        if create_subscription:
+            self.subscription = self.create_subscription(
+                String, "/detected_objects_json", self.cb, 10
+            )
+            self.get_logger().info(f"✅ Created subscription to /detected_objects_json")
+        else:
+            self.subscription = None
+            self.get_logger().info(f"⚠️ Subscription will be handled by parent node")
 
         # Publish detection request (trigger YOLO execution)
         self._detection_request_pub = self.create_publisher(
@@ -88,18 +96,20 @@ class YoloDetectionNode(ArmGrasper):
         self._detection_request_pub.publish(msg)
         self.get_logger().info(f"📡 Detection triggered: {site_id}")
     
-    def _wait_for_joint_state(self, timeout: float = 5.0) -> bool:
+    def _wait_for_joint_state(self, timeout: float = 5.0, require_fresh: bool = True, max_age: float = 0.5) -> bool:
         """
-        Wait for joint_state available
+        Wait for joint_state available and optionally ensure it's recent
         
         Resolves issue: pymoveit2 joint_state subscription has delay,
                   need to wait for state to be available before calling move_to_configuration
         
         Args:
             timeout: Wait timeout duration (seconds)
+            require_fresh: If True, also check timestamp freshness
+            max_age: Maximum acceptable age of joint_state timestamp (seconds)
             
         Returns:
-            True if joint_state available, False if timeout
+            True if joint_state available and fresh, False if timeout
         """
         import time
         start_time = time.time()
@@ -107,8 +117,27 @@ class YoloDetectionNode(ArmGrasper):
         while time.time() - start_time < timeout:
             js = getattr(self.arm, "joint_state", None)
             if js is not None and hasattr(js, 'position') and len(js.position) > 0:
-                self.get_logger().debug("✅ joint_state is available")
-                return True
+                # If timestamp freshness not required, return immediately
+                if not require_fresh:
+                    self.get_logger().debug("✅ joint_state is available")
+                    return True
+                
+                # Check timestamp freshness
+                if hasattr(js, 'header') and hasattr(js.header, 'stamp'):
+                    js_time = js.header.stamp.sec + js.header.stamp.nanosec * 1e-9
+                    current_time = self.get_clock().now().seconds_nanoseconds()
+                    current_time_sec = current_time[0] + current_time[1] * 1e-9
+                    age = current_time_sec - js_time
+                    
+                    if age <= max_age:
+                        self.get_logger().debug(f"✅ joint_state is available and fresh (age: {age:.3f}s)")
+                        return True
+                    else:
+                        self.get_logger().debug(f"⏳ joint_state exists but stale (age: {age:.3f}s > {max_age}s), waiting...")
+                else:
+                    # No timestamp available, treat as available
+                    self.get_logger().debug("✅ joint_state is available (no timestamp)")
+                    return True
             
             # Wait a short time for subscription to update - use _sleep_with_spin to keep ROS active
             self._sleep_with_spin(0.05)
@@ -368,18 +397,22 @@ class YoloDetectionNode(ArmGrasper):
     def cb(self, msg: String):
         """Process received JSON: parse -> select optimal target -> process in background thread."""
         self.get_logger().info(
-            "Yolo detection parsing detection JSON...msg[length]:" + str(len(msg.data))
+            f"[CB CALLED] Received message, length={len(msg.data)}, scan_mode={self._scan_mode}"
         )
         try:
             arr = json.loads(msg.data)
+            self.get_logger().info(f"[CB PARSED] JSON parsed successfully: {arr}")
         except Exception as e:
             self.get_logger().warn(f"Unable to parse detection JSON: {e}")
             return
         if not arr:
+            self.get_logger().warn("[CB] Empty detection array")
             return
 
         # Parse and try to get all matching targets (return multiple poses)
-        site, poses = self.parse_all_detected_objects_json(arr, "bottle")
+        # Accept any detected object label (None means accept all)
+        site, poses = self.parse_all_detected_objects_json(arr, None)
+        self.get_logger().info(f"[CB PARSED POSES] site={site}, num_poses={len(poses)}")
 
         if (not poses) or site is None:
             self.get_logger().warn("Valid target pose or request ID not found")
@@ -387,13 +420,14 @@ class YoloDetectionNode(ArmGrasper):
 
         # If in scan mode, only write result to cache and return (will not trigger grasp)
         if self._scan_mode:
-            self.get_logger().info("Received detection results in scan mode, writing to cache and returning")
+            self.get_logger().info("[CB SCAN MODE] Writing to _scan_result and returning")
             # New structure: poses list and original raw preserved
             self._scan_result = {
                 "request_id": site,
                 "poses": poses,
                 "raw": arr,
             }
+            self.get_logger().info(f"[CB SCAN MODE] _scan_result set: {self._scan_result}")
             return
 
         # # Non-scan mode: continue executing existing grasp workflow
@@ -954,6 +988,14 @@ class YoloDetectionNode(ArmGrasper):
             if not hand_pose:
                 self.get_logger().warn("Hand pose not provided")
                 return False
+            
+            # Wait for joint_state to be available and up-to-date (timestamp within 0.5s)
+            self.get_logger().info("⏳ Ensuring joint state is ready and fresh before delivery...")
+            if not self._wait_for_joint_state(timeout=5.0, require_fresh=True, max_age=0.5):
+                self.get_logger().warn("⚠️ Joint state not available or stale, proceeding anyway")
+            
+            # Additional short wait to ensure state freshness
+            self._sleep_with_spin(0.5)
             
             hand_xyz = pose_to_tuple(hand_pose)
             self.get_logger().info(f"Preparing to deliver to hand position: {hand_xyz}")
