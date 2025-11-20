@@ -12,6 +12,9 @@
   <material name="Blue">
     <color rgba="0 0 1 1" />
   </material>
+  <material name="Gray">
+    <color rgba="0.5 0.5 0.5 1" />
+  </material>
   <!-- ======================== XACRO PROPERTIES ======================== -->
   <!-- Mesh path prefix -->
   <xacro:property name="mesh_prefix" value="package://arm_description/urdf/meshes" />
@@ -45,6 +48,7 @@
         <geometry>
           <mesh filename="${mesh_prefix}/${mesh_file}" scale="${mesh_scale}" />
         </geometry>
+        <material name="Gray" />
       </visual>
       <collision name="${name}_collision">
         <origin xyz="${collision_xyz}" rpy="${collision_rpy}" />
@@ -93,14 +97,19 @@
     <xacro:inertial_matrix mass="500" />
   </link>
 
+  <!-- Base Link with origin at joint1 axis (virtual link) -->
+  <link name="base_link">
+    <xacro:inertial_matrix mass="0.001" />
+  </link>
+
   <xacro:fixed_joint name="bottom_joint"
     parent="base_link"
     child="bottom_link"
     xyz="0.0 0.0 0.0"
     rpy="0.0 0.0 0.0" />
 
-  <!-- Base Link (机械臂底座) -->
-  <xacro:mesh_link name="base_link"
+  <!-- Physical base link (renamed to base_link_physical) -->
+  <xacro:mesh_link name="base_link_physical"
     mesh_file="Base_08q-v1.stl"
     inertial_xyz="-0.03999704723368316 -0.03974905501648025 0.021865523723532104"
     inertial_rpy="0.0 0.0 0.0"
@@ -115,6 +124,13 @@
     visual_rpy="1.5707963267948968 6.378522481755146e-34 -4.712388980384690"
     collision_xyz="-0.058051990747593187 0.039999997308103726 -0.0024000000000000644"
     collision_rpy="1.5707963267948968 6.378522481755146e-34 -4.712388980384690" />
+
+  <!-- Connect base_link to base_link_physical with offset to joint1 axis -->
+  <xacro:fixed_joint name="base_to_physical"
+    parent="base_link"
+    child="base_link_physical"
+    xyz="0.012852 -0.04000 0.0"
+    rpy="0.0 0.0 0.0" />
 
   <!-- ======================== STRUCTURAL LINKS ======================== -->
   <!-- WaveShare Mounting Plate -->
@@ -409,13 +425,13 @@
   <!-- ======================== JOINTS ======================== -->
   <!-- Fixed Joints -->
   <xacro:fixed_joint name="Base_08q-v1_Rigid-43"
-    parent="base_link"
+    parent="base_link_physical"
     child="WaveShare_Mounting_Plate_01d-v1"
     xyz="-0.07525199 0.04 0.060300000000000006"
     rpy="3.141592653589793 6.259293778842913e-51 0.7853981633974485" />
 
   <xacro:fixed_joint name="Base_08q-v1_Rigid-44"
-    parent="base_link"
+    parent="base_link_physical"
     child="STS3215_03a-v1"
     xyz="-0.045651989999999996 0.029750000000000002 0.027800000000000002"
     rpy="1.5707963267948966 -8.851978152917189e-51 -1.5707963267948966" />
@@ -427,7 +443,7 @@
     rpy="-3.944304526105059e-31 -4.116117285135399e-31 -2.781046729970605e-32" />
 
   <xacro:fixed_joint name="Base_08q-v1_Rigid-47"
-    parent="base_link"
+    parent="base_link_physical"
     child="Passive_Horn_01-v1"
     xyz="-0.012851990000000004 0.04 0.013599999999999994"
     rpy="-1.5707963267948966 -8.851978152917189e-51 -1.5707963267948966" />
