@@ -3,7 +3,7 @@
 <robot name="arm" xmlns:xacro="http://ros.org/wiki/xacro">
 
   <!-- ======================== GLOBAL CONSTANTS ======================== -->
-  <xacro:property name="M_PI" value="3.14159" />
+  <xacro:property name="M_PI" value="3.141592653589793" />
   <xacro:property name="COLLISION_SCALE" value="0.80" />
 
   <!-- ======================== MATERIAL DEFINITIONS ======================== -->
