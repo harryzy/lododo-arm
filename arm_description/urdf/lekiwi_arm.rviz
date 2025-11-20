@@ -63,96 +63,101 @@ Visualization Manager:
       Enabled: true
       Links:
         All Links Enabled: true
+        Camera-Model-v3-1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        arm_base_link:
+        Moving_Jaw_08d-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        asym_clip:
+        Passive_Horn_01-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_jaw:
+        Rotation_Pitch_08i-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        joint1_servo:
+        SO_ARM100_08k_116_Square-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        joint2_servo:
+        SO_ARM100_08k_Asym_Mirror_Clip-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        joint3_servo:
+        SO_ARM100_08k_Mirror-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        joint4_servo:
+        STS3215_03a-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        joint5_servo:
+        STS3215_03a-v1-1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        joint6_servo:
+        STS3215_03a-v1-2:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link1_rotation:
+        STS3215_03a-v1-3:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link2_upper_arm:
+        STS3215_03a-v1-4:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link3_forearm:
+        STS3215_03a_Wrist_Roll-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link4_wrist_pitch:
+        WaveShare_Mounting_Plate_01d-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link5_wrist_roll:
+        Wrist-Camera-Mount-v11:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        passive_horn:
+        Wrist_Roll_08c-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        waveshare_mount:
+        Wrist_Roll_Pitch_08i-v1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        wrist_camera:
+        base_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        wrist_camera_mount:
+        bottom_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -166,16 +171,16 @@ Visualization Manager:
       Value: true
       Visual Enabled: true
     - Class: rviz_default_plugins/Axes
-      Enabled: false
+      Enabled: true
       Length: 0.5
       Name: Axes
-      Radius: 0.029999999329447746
+      Radius: 0.009999999776482582
       Reference Frame: <Fixed Frame>
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: arm_base_link
+    Fixed Frame: base_link
     Frame Rate: 30
   Name: root
   Tools:
@@ -233,10 +238,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4403979182243347
+      Pitch: 0.750397801399231
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.5053975582122803
+      Yaw: 6.098581790924072
     Saved: ~
 Window Geometry:
   Displays:
