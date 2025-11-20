@@ -19,8 +19,8 @@ setup(
         # config setup
         ("share/" + package_name + "/config", glob("config/*.yaml")),
         # meshes setup
-        ("share/" + package_name + "/meshes", glob("meshes/*.stl")),
-        ("share/" + package_name + "/meshes", glob("meshes/*.dae")),
+        ("share/" + package_name + "/urdf/meshes", glob("urdf/meshes/*.stl")),
+        ("share/" + package_name + "/urdf/meshes", glob("urdf/meshes/*.dae")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
