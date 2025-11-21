@@ -237,14 +237,14 @@ Visualization Manager:
         bottom_link:
           Value: false
         camera_optical_frame:
-          Value: false
-        grasping_frame:
           Value: true
-      Marker Scale: 1
+        grasping_frame:
+          Value: false
+      Marker Scale: 0.5
       Name: TF
       Show Arrows: true
       Show Axes: true
-      Show Names: false
+      Show Names: true
       Tree:
         base_link:
           base_link_physical:
@@ -323,7 +323,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.8308264017105103
+      Distance: 1.2412397861480713
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -338,10 +338,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6003985404968262
+      Pitch: 0.6853989362716675
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.7603931427001953
+      Yaw: 2.9453999996185303
     Saved: ~
 Window Geometry:
   Displays:
@@ -360,4 +360,4 @@ Window Geometry:
     collapsed: false
   Width: 1200
   X: 653
-  Y: 277
+  Y: 197

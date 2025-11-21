@@ -512,8 +512,8 @@
    <xacro:fixed_joint name="camera_optical_joint"
     parent="Camera-Model-v3-1"
     child="camera_optical_frame"
-    xyz="0 0 0"
-    rpy="-1.570796 0 -1.570796" />
+    xyz="0.025 -0.017 -0.001"
+    rpy="0.0 0.0 0.0" />
 
     <xacro:fixed_joint name="grasping_frame_joint"
     parent="STS3215_03a-v1-4"
