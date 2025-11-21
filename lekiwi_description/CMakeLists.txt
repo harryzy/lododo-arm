@@ -25,7 +25,6 @@ endif()
 # Install directories
 install(DIRECTORY
   urdf
-  meshes
   launch
   config
   rviz
