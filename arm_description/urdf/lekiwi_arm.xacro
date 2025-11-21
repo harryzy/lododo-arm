@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<robot name="LeKiwi_Arm" xmlns:xacro="http://ros.org/wiki/xacro">
+<robot name="lekiwi_arm" xmlns:xacro="http://ros.org/wiki/xacro">
   <!-- ======================== GLOBAL CONSTANTS ======================== -->
   <xacro:property name="M_PI" value="3.141592653589793" />
   <!-- ======================== MATERIAL DEFINITIONS ======================== -->
@@ -433,6 +433,14 @@
     collision_xyz="0.0060386479186058575 -0.01378730883655603 -0.012862534163259838"
     collision_rpy="-0.17453292519943064 -0.9599310885968775 -3.141592653589793" />
 
+  <!-- Camera frame Model -->
+  <link name="camera_optical_frame" />
+
+   <!-- ======================== END EFFECTOR ======================== -->
+  <link name="grasping_frame" />
+
+  
+
   <!-- ======================== JOINTS ======================== -->
   <!-- Fixed Joints -->
   <xacro:fixed_joint name="Base_08q-v1_Rigid-43"
@@ -501,6 +509,19 @@
     xyz="0.0015500000000000004 0.00712333000000001 0.06397354"
     rpy="1.5707963267948966 -0.0 2.181661564992912" />
 
+   <xacro:fixed_joint name="camera_optical_joint"
+    parent="Camera-Model-v3-1"
+    child="camera_optical_frame"
+    xyz="0 0 0"
+    rpy="-1.570796 0 -1.570796" />
+
+    <xacro:fixed_joint name="grasping_frame_joint"
+    parent="STS3215_03a-v1-4"
+    child="grasping_frame"
+    xyz="-0.02 -0.09 -0.03"
+    rpy="0 0 0" />
+
+  <!-- ======================== ACTUATED JOINTS ======================== -->
   <!-- Continuous Joints (Actuated) -->
   <xacro:revolute_joint name="joint1"
     parent="STS3215_03a-v1"

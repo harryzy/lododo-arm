@@ -8,6 +8,8 @@ Panels:
         - /Status1
         - /RobotModel1
         - /Axes1
+        - /TF1
+        - /TF1/Frames1
       Splitter Ratio: 0.5
     Tree Height: 549
   - Class: rviz_common/Selection
@@ -156,12 +158,24 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
+        base_link_physical:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
           Value: true
         bottom_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
+        camera_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        grasping_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
       Mass Properties:
         Inertia: false
         Mass: false
@@ -176,6 +190,92 @@ Visualization Manager:
       Name: Axes
       Radius: 0.009999999776482582
       Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+        Camera-Model-v3-1:
+          Value: false
+        Moving_Jaw_08d-v1:
+          Value: false
+        Passive_Horn_01-v1:
+          Value: false
+        Rotation_Pitch_08i-v1:
+          Value: false
+        SO_ARM100_08k_116_Square-v1:
+          Value: false
+        SO_ARM100_08k_Asym_Mirror_Clip-v1:
+          Value: false
+        SO_ARM100_08k_Mirror-v1:
+          Value: false
+        STS3215_03a-v1:
+          Value: false
+        STS3215_03a-v1-1:
+          Value: false
+        STS3215_03a-v1-2:
+          Value: false
+        STS3215_03a-v1-3:
+          Value: false
+        STS3215_03a-v1-4:
+          Value: false
+        STS3215_03a_Wrist_Roll-v1:
+          Value: false
+        WaveShare_Mounting_Plate_01d-v1:
+          Value: false
+        Wrist-Camera-Mount-v11:
+          Value: false
+        Wrist_Roll_08c-v1:
+          Value: false
+        Wrist_Roll_Pitch_08i-v1:
+          Value: false
+        base_link:
+          Value: false
+        base_link_physical:
+          Value: false
+        bottom_link:
+          Value: false
+        camera_optical_frame:
+          Value: false
+        grasping_frame:
+          Value: true
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: false
+      Tree:
+        base_link:
+          base_link_physical:
+            Passive_Horn_01-v1:
+              {}
+            STS3215_03a-v1:
+              Rotation_Pitch_08i-v1:
+                SO_ARM100_08k_Asym_Mirror_Clip-v1:
+                  {}
+                STS3215_03a-v1-1:
+                  SO_ARM100_08k_116_Square-v1:
+                    STS3215_03a-v1-2:
+                      SO_ARM100_08k_Mirror-v1:
+                        STS3215_03a-v1-3:
+                          Wrist_Roll_Pitch_08i-v1:
+                            STS3215_03a_Wrist_Roll-v1:
+                              Wrist_Roll_08c-v1:
+                                STS3215_03a-v1-4:
+                                  Moving_Jaw_08d-v1:
+                                    {}
+                                  grasping_frame:
+                                    {}
+                                Wrist-Camera-Mount-v11:
+                                  Camera-Model-v3-1:
+                                    camera_optical_frame:
+                                      {}
+            WaveShare_Mounting_Plate_01d-v1:
+              {}
+          bottom_link:
+            {}
+      Update Interval: 0
       Value: true
   Enabled: true
   Global Options:
@@ -238,10 +338,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.750397801399231
+      Pitch: 0.6003985404968262
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 6.098581790924072
+      Yaw: 2.7603931427001953
     Saved: ~
 Window Geometry:
   Displays:
@@ -259,5 +359,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1200
-  X: 419
-  Y: 71
+  X: 653
+  Y: 277
