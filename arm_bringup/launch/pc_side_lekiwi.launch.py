@@ -140,7 +140,7 @@ def generate_launch_description():
     )
 
     # 2. Launch RViz with custom control panel (delayed to ensure move_group is ready)
-    # Reuse arm_control_rviz.launch.py from arm_rviz_plugin
+    # Use lekiwi_control_rviz.launch.py for lekiwi model
     rviz_launch = GroupAction(
         condition=IfCondition(use_rviz),
         actions=[
@@ -150,7 +150,7 @@ def generate_launch_description():
                 actions=[
                     IncludeLaunchDescription(
                         PythonLaunchDescriptionSource([
-                            PathJoinSubstitution([rviz_plugin_pkg, 'launch', 'arm_control_rviz.launch.py'])
+                            PathJoinSubstitution([rviz_plugin_pkg, 'launch', 'lekiwi_control_rviz.launch.py'])
                         ])
                     )
                 ]

@@ -506,7 +506,7 @@
     <xacro:fixed_joint name="grasping_frame_joint"
     parent="STS3215_03a-v1-4"
     child="grasping_frame"
-    xyz="-0.02 -0.09 -0.03"
+    xyz="-0.032 -0.133 -0.085"
     rpy="0 0 0" />
 
   <!-- ======================== ACTUATED JOINTS ======================== -->
