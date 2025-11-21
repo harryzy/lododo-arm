@@ -1,0 +1,10 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: lekiwi_description
+    relative_path: urdf/lekiwi_arm.xacro
+  srdf:
+    relative_path: config/arm.srdf
+  package_settings:
+    author_name: lododo
+    author_email: lodod@lododo.org
+    generated_timestamp: 1763694400

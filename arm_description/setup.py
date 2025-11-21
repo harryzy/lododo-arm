@@ -12,10 +12,9 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         # launch setup
         ("share/" + package_name + "/launch", glob("launch/py/*_launch.py")),
-        # urdf setup
-        ("share/" + package_name + "/urdf", glob("urdf/*.xacro")),
-        ("share/" + package_name + "/urdf", glob("urdf/*.urdf")),
-        ("share/" + package_name + "/urdf", glob("urdf/*.rviz")),
+        # urdf setup - only install arm.xacro (exclude lekiwi backup files)
+        ("share/" + package_name + "/urdf", ["urdf/arm.xacro"]),
+        ("share/" + package_name + "/urdf", ["urdf/urdf.rviz"]),
         # config setup
         ("share/" + package_name + "/config", glob("config/*.yaml")),
         # meshes setup

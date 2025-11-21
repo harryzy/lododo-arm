@@ -1,0 +1,32 @@
+planning_pipelines:
+  pipeline_names: ["ompl"]
+planning_pipeline: ompl
+
+ompl:
+  planning_plugin: ompl_interface/OMPLPlanner
+  request_adapters: >
+    default_planner_request_adapters/FixWorkspaceBounds
+    default_planner_request_adapters/FixStartStateBounds
+    default_planner_request_adapters/FixStartStateCollision
+    default_planner_request_adapters/FixStartStatePathConstraints
+    default_planner_request_adapters/AddTimeParameterization
+  start_state_max_bounds_error: 0.1
+
+# SRDF
+arm_grp:
+  planner_configs:
+    - RRTConnectkConfigDefault
+    - RRTstarkConfigDefault
+    - PRMkConfigDefault
+
+planner_configs:
+  RRTConnectkConfigDefault:
+    type: geometric::RRTConnect
+    range: 0.2
+    goal_bias: 0.05
+  RRTstarkConfigDefault:
+    type: geometric::RRTstar
+    range: 0.2
+  PRMkConfigDefault:
+    type: geometric::PRM
+    max_nearest_neighbors: 10

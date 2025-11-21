@@ -1,0 +1,625 @@
+<?xml version="1.0"?>
+<robot name="lekiwi_arm" xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- ======================== GLOBAL CONSTANTS ======================== -->
+  <xacro:property name="M_PI" value="3.141592653589793" />
+  <!-- ======================== MATERIAL DEFINITIONS ======================== -->
+  <material name="Black">
+    <color rgba="0 0 0 1" />
+  </material>
+  <material name="White">
+    <color rgba="1 1 1 1" />
+  </material>
+  <material name="Blue">
+    <color rgba="0 0 1 1" />
+  </material>
+  <material name="Gray">
+    <color rgba="0.5 0.5 0.5 1" />
+  </material>
+  <!-- ======================== XACRO PROPERTIES ======================== -->
+  <!-- Mesh path prefix -->
+  <xacro:property name="mesh_prefix" value="package://lekiwi_description/urdf/meshes" />
+  <!-- Inertial matrix macro -->
+  <xacro:macro name="inertial_matrix" params="mass">
+    <inertial>
+      <mass value="${mass}" />
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="0.5" iyz="0.0" izz="1.0" />
+    </inertial>
+  </xacro:macro>
+  <!-- Mesh scale (all STL files use same scale) -->
+  <xacro:property name="mesh_scale" value="0.001 0.001 0.001" />
+
+  <!-- ======================== MACROS ======================== -->
+  <!-- Macro for creating a link with mesh geometry -->
+  <xacro:macro name="mesh_link"
+    params="name mesh_file 
+                                        inertial_xyz inertial_rpy mass 
+                                        ixx iyy izz ixy iyz ixz
+                                        visual_xyz visual_rpy
+                                        collision_xyz collision_rpy">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="${inertial_xyz}" rpy="${inertial_rpy}" />
+        <mass value="${mass}" />
+        <inertia ixx="${ixx}" iyy="${iyy}" izz="${izz}"
+          ixy="${ixy}" iyz="${iyz}" ixz="${ixz}" />
+      </inertial>
+      <visual name="${name}_visual">
+        <origin xyz="${visual_xyz}" rpy="${visual_rpy}" />
+        <geometry>
+          <mesh filename="${mesh_prefix}/${mesh_file}" scale="${mesh_scale}" />
+        </geometry>
+        <material name="Gray" />
+      </visual>
+      <!-- Collision geometry removed to avoid self-collision issues -->
+    </link>
+  </xacro:macro>
+
+  <!-- Macro for creating a fixed joint -->
+  <xacro:macro name="fixed_joint" params="name parent child xyz rpy">
+    <joint name="${name}" type="fixed">
+      <origin xyz="${xyz}" rpy="${rpy}" />
+      <parent link="${parent}" />
+      <child link="${child}" />
+    </joint>
+  </xacro:macro>
+
+  <!-- Macro for creating a continuous joint -->
+  <xacro:macro name="continuous_joint" params="name parent child xyz rpy axis">
+    <joint name="${name}" type="continuous">
+      <origin xyz="${xyz}" rpy="${rpy}" />
+      <parent link="${parent}" />
+      <child link="${child}" />
+      <axis xyz="${axis}" />
+    </joint>
+  </xacro:macro>
+
+  <!-- Macro for creating a revolute joint -->
+  <xacro:macro name="revolute_joint" params="name parent child xyz rpy axis lower upper effort velocity">
+    <joint name="${name}" type="revolute">
+      <origin xyz="${xyz}" rpy="${rpy}" />
+      <parent link="${parent}" />
+      <child link="${child}" />
+      <axis xyz="${axis}" />
+      <limit lower="${lower}" upper="${upper}" effort="${effort}" velocity="${velocity}" />
+    </joint>
+  </xacro:macro>
+
+  <!-- ======================== BASE STRUCTURE ======================== -->
+  <!-- Root link (no inertia to avoid KDL warning) -->
+  <link name="base_link" />
+
+  <!-- Connect root to physical base -->
+  <xacro:fixed_joint name="base_to_physical"
+    parent="base_link"
+    child="base_link_physical"
+    xyz="0.0 0.0 0.0"
+    rpy="0.0 0.0 0.0" />
+
+  <!-- Bottom platform link -->
+  <link name="bottom_link">
+    <visual>
+      <origin xyz="0 0 -0.02" rpy="0 0 0" />
+      <geometry>
+        <box size="1 1 0.02" />
+      </geometry>
+      <material name="Blue" />
+    </visual>
+    <!-- Collision removed for bottom_link -->
+    <xacro:inertial_matrix mass="500" />
+  </link>
+
+  <xacro:fixed_joint name="bottom_joint"
+    parent="base_link_physical"
+    child="bottom_link"
+    xyz="0.0 0.0 0.0"
+    rpy="0.0 0.0 0.0" />
+
+  <!-- Physical base link (renamed to base_link_physical) -->
+  <xacro:mesh_link name="base_link_physical"
+    mesh_file="Base_08q-v1.stl"
+    inertial_xyz="-0.03999704723368316 -0.03974905501648025 0.021865523723532104"
+    inertial_rpy="0.0 0.0 0.0"
+    mass="1.2829039880853146"
+    ixx="0.0013599465686859134"
+    iyy="0.0015570925522625356"
+    izz="0.0017754186964794674"
+    ixy="-2.7674912025085476e-08"
+    iyz="0.00024876935781550404"
+    ixz="-1.4799628966957228e-07"
+    visual_xyz="-0.058051990747593187 0.039999997308103726 -0.0024000000000000644"
+    visual_rpy="1.5707963267948968 6.378522481755146e-34 -4.712388980384690"
+    collision_xyz="-0.058051990747593187 0.039999997308103726 -0.0024000000000000644"
+    collision_rpy="1.5707963267948968 6.378522481755146e-34 -4.712388980384690" />
+
+  <!-- ======================== STRUCTURAL LINKS ======================== -->
+  <!-- WaveShare Mounting Plate -->
+  <xacro:mesh_link name="WaveShare_Mounting_Plate_01d-v1"
+    mesh_file="WaveShare_Mounting_Plate_01d-v1.stl"
+    inertial_xyz="-0.0036802122213187593 -0.0036094977362838856 6.824776544718247e-06"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.07141322001638221"
+    ixx="1.5714974230074772e-05"
+    iyy="1.571497423007476e-05"
+    izz="1.3312770357058572e-05"
+    ixy="6.4527910706321766e-06"
+    iyz="1.5349694469765155e-10"
+    ixz="1.534969447374064e-10"
+    visual_xyz="-0.005409369308163408 -0.005338654823128516 -3.552713678800501e-17"
+    visual_rpy="1.5707963267948966 -4.4068773779038136e-17 2.356194490192345"
+    collision_xyz="-0.005409369308163408 -0.005338654823128516 -3.552713678800501e-17"
+    collision_rpy="1.5707963267948966 -4.4068773779038136e-17 2.356194490192345" />
+
+  <!-- Rotation Pitch Link -->
+  <xacro:mesh_link name="Rotation_Pitch_08i-v1"
+    mesh_file="Rotation_Pitch_08i-v1.stl"
+    inertial_xyz="0.00027157225787806426 -0.03155586567874573 0.009540449649933115"
+    inertial_rpy="4.3790577010150533e-47 4.379057701015054e-47 -1.5557538194652858e-61"
+    mass="0.5385469320676795"
+    ixx="0.00037498929247645185"
+    iyy="0.00034052316913093367"
+    izz="0.00015416122792210035"
+    ixy="-6.375305991054909e-07"
+    iyz="-3.6006983324524115e-05"
+    ixz="3.4882693251635207e-06"
+    visual_xyz="2.691896153743309e-09 0.012000000747593217 0.04840000000000009"
+    visual_rpy="-1.5707963267948941 -3.4346225406004724e-16 1.5707963267948963"
+    collision_xyz="2.691896153743309e-09 0.012000000747593217 0.04840000000000009"
+    collision_rpy="-1.5707963267948941 -3.4346225406004724e-16 1.5707963267948963" />
+
+  <!-- Servo Motor Link (Joint 1) -->
+  <xacro:mesh_link name="STS3215_03a-v1"
+    mesh_file="STS3215_03a-v1.stl"
+    inertial_xyz="-0.010249997314858655 0.016027064924721765 -0.019999026815617257"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.2843033831904074"
+    ixx="7.348827769135388e-05"
+    iyy="6.153681935695018e-05"
+    izz="3.972527876478296e-05"
+    ixy="-2.948942387958768e-14"
+    iyz="5.568928366529984e-07"
+    ixz="4.0140055866208044e-14"
+    visual_xyz="-0.010249997308103833 0.015899999999999928 -0.020299999252406824"
+    visual_rpy="-1.5707963267948992 1.5707963267948928 0"
+    collision_xyz="-0.010249997308103833 0.015899999999999928 -0.020299999252406824"
+    collision_rpy="-1.5707963267948992 1.5707963267948928 0" />
+
+  <!-- Asymmetric Mirror Clip -->
+  <xacro:mesh_link name="SO_ARM100_08k_Asym_Mirror_Clip-v1"
+    mesh_file="SO_ARM100_08k_Asym_Mirror_Clip-v1.stl"
+    inertial_xyz="-0.023249790543467236 0.009494231975835899 0.002658209837920218"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.10853073755546007"
+    ixx="2.6819408873440288e-05"
+    iyy="4.591982320177254e-05"
+    izz="5.824324969726431e-05"
+    ixy="-1.7483214372584268e-07"
+    iyz="-5.297613839098936e-08"
+    ixz="-1.9180973510858863e-07"
+    visual_xyz="-0.02319999730810401 -0.026949999252406782 -0.0372499073366073"
+    visual_rpy="-3.141592653589793 1.5707963267948941 0"
+    collision_xyz="-0.02319999730810401 -0.026949999252406782 -0.0372499073366073"
+    collision_rpy="-3.141592653589793 1.5707963267948941 0" />
+
+  <!-- Passive Horn -->
+  <xacro:mesh_link name="Passive_Horn_01-v1"
+    mesh_file="Passive_Horn_01-v1.stl"
+    inertial_xyz="2.6917174546039143e-09 -0.0010740097666846627 -7.475931163014593e-10"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.00454511487954422"
+    ixx="1.2518150597416012e-07"
+    iyy="2.464408524633815e-07"
+    izz="1.2518150393394235e-07"
+    ixy="-1.283788438507426e-19"
+    iyz="0.0"
+    ixz="8.715254501525044e-23"
+    visual_xyz="2.6918962670870098e-09 7.993605777301127e-17 -7.475931163014593e-10"
+    visual_rpy="1.5707963267948966 -4.930380657631324e-32 6.930797439365193e-49"
+    collision_xyz="2.6918962670870098e-09 7.993605777301127e-17 -7.475931163014593e-10"
+    collision_rpy="1.5707963267948966 -4.930380657631324e-32 6.930797439365193e-49" />
+
+  <!-- Servo Motor Link (Joint 2) -->
+  <xacro:mesh_link name="STS3215_03a-v1-1"
+    mesh_file="STS3215_03a-v1-1.stl"
+    inertial_xyz="0.0160270676166179 0.010250000754348055 -0.01999902756321033"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.2843033831904074"
+    ixx="6.153681935694953e-05"
+    iyy="7.348827769135171e-05"
+    izz="3.972527876478253e-05"
+    ixy="2.948943437265658e-14"
+    iyz="-4.013890531409639e-14"
+    ixz="5.568928366528663e-07"
+    visual_xyz="0.01590000269189606 0.010250000747593227 -0.020299999999999888"
+    visual_rpy="3.061616997868385e-16 1.570796326794894 0"
+    collision_xyz="0.01590000269189606 0.010250000747593227 -0.020299999999999888"
+    collision_rpy="3.061616997868385e-16 1.570796326794894 0" />
+
+  <!-- Arm Link 1 (116mm Square) -->
+  <xacro:mesh_link name="SO_ARM100_08k_116_Square-v1"
+    mesh_file="SO_ARM100_08k_116_Square-v1.stl"
+    inertial_xyz="-0.019699521396133086 -0.057761973340815856 -0.00542034076312131"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.9906249126045027"
+    ixx="0.001250627685357622"
+    iyy="0.0004892267713729921"
+    izz="0.0016228645319323214"
+    ixy="8.068202927851326e-06"
+    iyz="-0.00011683370128806429"
+    ixz="1.3596898095040173e-06"
+    visual_xyz="-0.019699997308103886 -0.06379145291921354 -0.017626866945393508"
+    visual_rpy="1.570796326794894 -0.08726646259971683 1.5707963267948972"
+    collision_xyz="-0.019699997308103886 -0.06379145291921354 -0.017626866945393508"
+    collision_rpy="1.570796326794894 -0.08726646259971683 1.5707963267948972" />
+
+  <!-- Servo Motor Link (Joint 3) -->
+  <xacro:mesh_link name="STS3215_03a-v1-2"
+    mesh_file="STS3215_03a-v1-2.stl"
+    inertial_xyz="0.016027067616617895 -0.011954028773405692 0.019029580609805842"
+    inertial_rpy="0.0 -0.0 -1.9446922743316068e-62"
+    mass="0.2843033831904074"
+    ixx="6.153681935695127e-05"
+    iyy="7.323180978895463e-05"
+    izz="3.9981746667182695e-05"
+    ixy="4.853637943208478e-08"
+    iyz="2.9314415785545002e-06"
+    ixz="-5.547736938490272e-07"
+    visual_xyz="0.015900002691896058 -0.011980260242951542 0.0193294077561961"
+    visual_rpy="-1.5707963267948655 -1.4835298641951797 -1.5707963267949274"
+    collision_xyz="0.015900002691896058 -0.011980260242951542 0.0193294077561961"
+    collision_rpy="-1.5707963267948655 -1.4835298641951797 -1.5707963267949274" />
+
+  <!-- Arm Link 2 (Mirror) -->
+  <xacro:mesh_link name="SO_ARM100_08k_Mirror-v1"
+    mesh_file="SO_ARM100_08k_Mirror-v1.stl"
+    inertial_xyz="-0.01521487611614386 0.06115231912604866 0.010924244381939695"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.8772447501056027"
+    ixx="0.0009927953405503495"
+    iyy="0.0003938875410144718"
+    izz="0.0012139125572331573"
+    ixy="0.00011404883978774629"
+    iyz="-0.00015860294019953095"
+    ixz="2.1130712730160653e-05"
+    visual_xyz="-0.019699997308103925 0.06942143618525867 -0.020252778383176597"
+    visual_rpy="-1.570796326794894 0.17453292519943336 -1.570796326794896"
+    collision_xyz="-0.019699997308103925 0.06942143618525867 -0.020252778383176597"
+    collision_rpy="-1.570796326794894 0.17453292519943336 -1.570796326794896" />
+
+  <!-- Servo Motor Link (Joint 4) -->
+  <xacro:mesh_link name="STS3215_03a-v1-3"
+    mesh_file="STS3215_03a-v1-3.stl"
+    inertial_xyz="0.016027067616617773 -0.021475086668919854 0.006621488568077219"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.2843033831904074"
+    ixx="6.153681935695127e-05"
+    iyy="4.074335774088658e-05"
+    izz="7.247019871524764e-05"
+    ixy="5.484323882535203e-07"
+    iyz="-5.773812828266185e-06"
+    ixz="9.670339719917652e-08"
+    visual_xyz="0.015900002691895933 -0.02177148665928616 0.006569225259552951"
+    visual_rpy="-1.5707963267949003 0.17453292519943228 -1.5707963267948974"
+    collision_xyz="0.015900002691895933 -0.02177148665928616 0.006569225259552951"
+    collision_rpy="-1.5707963267949003 0.17453292519943228 -1.5707963267948974" />
+
+  <!-- Wrist Roll Pitch Link -->
+  <xacro:mesh_link name="Wrist_Roll_Pitch_08i-v1"
+    mesh_file="Wrist_Roll_Pitch_08i-v1.stl"
+    inertial_xyz="-0.016809778580177636 0.011102331354009483 -0.023929944943314147"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.2392168278135931"
+    ixx="0.00011529218614688731"
+    iyy="0.00018638564430360945"
+    izz="0.00013965599636815533"
+    ixy="-2.876087303228392e-06"
+    iyz="2.8346655089702376e-05"
+    ixz="6.069085592614985e-06"
+    visual_xyz="-0.02009999730810403 0.011833314900678236 -0.025376621075742598"
+    visual_rpy="0.4363323129985828 -3.60689819227396e-15 1.3005493599094667e-17"
+    collision_xyz="-0.02009999730810403 0.011833314900678236 -0.025376621075742598"
+    collision_rpy="0.4363323129985828 -3.60689819227396e-15 1.3005493599094667e-17" />
+
+  <!-- Servo Motor Link (Joint 5 - Wrist Roll) -->
+  <xacro:mesh_link name="STS3215_03a_Wrist_Roll-v1"
+    mesh_file="STS3215_03a_Wrist_Roll-v1.stl"
+    inertial_xyz="-0.015998302175323338 0.01584440444633293 -0.009724875472953585"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.2799142523131049"
+    ixx="3.834851845043938e-05"
+    iyy="6.944931198304971e-05"
+    izz="6.249728558243347e-05"
+    ixy="-6.399687685208939e-07"
+    iyz="4.1425511727094175e-06"
+    ixz="1.3724175470711101e-06"
+    visual_xyz="-0.01649999730810397 0.016009282130255525 -0.01007845679092931"
+    visual_rpy="-0.4363323129985829 -3.55514238212376e-15 -3.141592653589793"
+    collision_xyz="-0.01649999730810397 0.016009282130255525 -0.01007845679092931"
+    collision_rpy="-0.4363323129985829 -3.55514238212376e-15 -3.141592653589793" />
+
+  <!-- Wrist Roll Link -->
+  <xacro:mesh_link name="Wrist_Roll_08c-v1"
+    mesh_file="Wrist_Roll_08c-v1.stl"
+    inertial_xyz="0.013763229636538839 0.011847838431604849 -0.02681060701774312"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.44698022927880193"
+    ixx="0.0003009649490412908"
+    iyy="0.000302335224862029"
+    izz="0.00019663017287168712"
+    ixy="-2.7280550079654427e-05"
+    iyz="6.471570024008629e-05"
+    ixz="4.8752001162076285e-05"
+    visual_xyz="2.691896090478707e-09 -6.35704431317663e-10 1.1733438753935843e-09"
+    visual_rpy="2.7052603405912103 3.5551423821237634e-15 3.141592653589793"
+    collision_xyz="2.691896090478707e-09 -6.35704431317663e-10 1.1733438753935843e-09"
+    collision_rpy="2.7052603405912103 3.5551423821237634e-15 3.141592653589793" />
+
+  <!-- Servo Motor Link (Gripper Joint) -->
+  <xacro:mesh_link name="STS3215_03a-v1-4"
+    mesh_file="STS3215_03a-v1-4.stl"
+    inertial_xyz="-0.01999902487131423 -0.01606298453944074 0.010193612482126984"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.2843033831904074"
+    ixx="3.972527876478296e-05"
+    iyy="7.135367321426094e-05"
+    izz="6.367142383404377e-05"
+    ixy="-2.35353046222804e-07"
+    iyz="4.577674103164314e-06"
+    ixz="5.047163313676162e-07"
+    visual_xyz="-0.0202999973081038 -0.01600928457570463 0.010078452554247068"
+    visual_rpy="-0.4363323129985825 9.798519944458119e-17 -3.1415926535897896"
+    collision_xyz="-0.0202999973081038 -0.01600928457570463 0.010078452554247068"
+    collision_rpy="-0.4363323129985825 9.798519944458119e-17 -3.1415926535897896" />
+
+  <!-- Moving Jaw (Gripper) -->
+  <xacro:mesh_link name="Moving_Jaw_08d-v1"
+    mesh_file="Moving_Jaw_08d-v1.stl"
+    inertial_xyz="0.0016198187276587506 0.031683055327891375 -0.018764632295228623"
+    inertial_rpy="0.0 -0.0 1.0947644252537636e-47"
+    mass="0.1586808414280307"
+    ixx="8.673205684445445e-05"
+    iyy="6.319638527524501e-05"
+    izz="3.0882476447698426e-05"
+    ixy="-1.6959196471754863e-06"
+    iyz="1.690507657065021e-05"
+    ixz="3.83219457506011e-06"
+    visual_xyz="2.6918962081623476e-09 0.01848868068371523 0.008621416469254514"
+    visual_rpy="1.1344640137963138 3.5551423821237634e-15 3.141592653589793"
+    collision_xyz="2.6918962081623476e-09 0.01848868068371523 0.008621416469254514"
+    collision_rpy="1.1344640137963138 3.5551423821237634e-15 3.141592653589793" />
+
+  <!-- Wrist Camera Mount -->
+  <xacro:mesh_link name="Wrist-Camera-Mount-v11"
+    mesh_file="Wrist-Camera-Mount-v11.stl"
+    inertial_xyz="-0.012386670399303806 -0.0001931819643147037 0.033744611486572575"
+    inertial_rpy="0.0 -0.0 0.0"
+    mass="0.14254654385043797"
+    ixx="6.637825885912572e-05"
+    iyy="9.286021404085985e-05"
+    izz="2.9364578730897446e-05"
+    ixy="-1.9686261197744952e-08"
+    iyz="5.578936388252534e-07"
+    ixz="-2.8501487566848823e-07"
+    visual_xyz="-0.01244999730810389 3.3029762747105453e-09 -3.6269132763777637e-09"
+    visual_rpy="1.3015577936510953e-16 -0.4363323129985829 1.5707963267948932"
+    collision_xyz="-0.01244999730810389 3.3029762747105453e-09 -3.6269132763777637e-09"
+    collision_rpy="1.3015577936510953e-16 -0.4363323129985829 1.5707963267948932" />
+
+  <!-- Camera Model -->
+  <xacro:mesh_link name="Camera-Model-v3-1"
+    mesh_file="Camera-Model-v3-1.stl"
+    inertial_xyz="0.00942672137716988 -0.014773756775059326 -0.01034538997402958"
+    inertial_rpy="4.379057701015054e-47 -5.551115123125784e-17 0.0"
+    mass="0.039920058315088616"
+    ixx="6.810843705690638e-06"
+    iyy="5.386223522045076e-06"
+    izz="6.002136685688621e-06"
+    ixy="-3.1416649993652216e-07"
+    iyz="-3.0173410406166294e-07"
+    ixz="1.1161566006313797e-06"
+    visual_xyz="0.0060386479186058575 -0.01378730883655603 -0.012862534163259838"
+    visual_rpy="-0.17453292519943064 -0.9599310885968775 -3.141592653589793"
+    collision_xyz="0.0060386479186058575 -0.01378730883655603 -0.012862534163259838"
+    collision_rpy="-0.17453292519943064 -0.9599310885968775 -3.141592653589793" />
+
+  <!-- Camera frame Model -->
+  <link name="camera_optical_frame" />
+
+   <!-- ======================== END EFFECTOR ======================== -->
+  <link name="grasping_frame" />
+
+  
+
+  <!-- ======================== JOINTS ======================== -->
+  <!-- Fixed Joints -->
+  <xacro:fixed_joint name="Base_08q-v1_Rigid-43"
+    parent="base_link_physical"
+    child="WaveShare_Mounting_Plate_01d-v1"
+    xyz="-0.07525199 0.04 0.060300000000000006"
+    rpy="3.141592653589793 6.259293778842913e-51 0.7853981633974485" />
+
+  <xacro:fixed_joint name="Base_08q-v1_Rigid-44"
+    parent="base_link_physical"
+    child="STS3215_03a-v1"
+    xyz="-0.045651989999999996 0.029750000000000002 0.027800000000000002"
+    rpy="1.5707963267948966 -8.851978152917189e-51 -1.5707963267948966" />
+
+  <xacro:fixed_joint name="Rotation_Pitch_08i-v1_Rigid-46"
+    parent="Rotation_Pitch_08i-v1"
+    child="SO_ARM100_08k_Asym_Mirror_Clip-v1"
+    xyz="0.023000000000000066 -0.04085 -0.023200000000000002"
+    rpy="-3.944304526105059e-31 -4.116117285135399e-31 -2.781046729970605e-32" />
+
+  <xacro:fixed_joint name="Base_08q-v1_Rigid-47"
+    parent="base_link_physical"
+    child="Passive_Horn_01-v1"
+    xyz="-0.012851990000000004 0.04 0.013599999999999994"
+    rpy="-1.5707963267948966 -8.851978152917189e-51 -1.5707963267948966" />
+
+  <xacro:fixed_joint name="Rotation_Pitch_08i-v1_Rigid-48"
+    parent="Rotation_Pitch_08i-v1"
+    child="STS3215_03a-v1-1"
+    xyz="-0.016299999999999943 -0.04085 -0.019400000000000014"
+    rpy="1.8260247115545314e-16 -4.116117285135399e-31 -2.781046729970605e-32" />
+
+  <xacro:fixed_joint name="SO_ARM100_08k_116_Square-v1_Rigid-50"
+    parent="SO_ARM100_08k_116_Square-v1"
+    child="STS3215_03a-v1-2"
+    xyz="-0.03610000000000001 -0.10151227 -0.013699510000000003"
+    rpy="-7.511797348558594e-34 -4.930380657631324e-32 1.3877787807814457e-17" />
+
+  <xacro:fixed_joint name="SO_ARM100_08k_Mirror-v1_Rigid-52"
+    parent="SO_ARM100_08k_Mirror-v1"
+    child="STS3215_03a-v1-3"
+    xyz="-0.0361 0.09885064 0.03311837999999998"
+    rpy="-3.1415926535897922 5.9164567891575885e-31 2.91703841149741e-62" />
+
+  <xacro:fixed_joint name="Wrist_Roll_Pitch_08i-v1_Rigid-54"
+    parent="Wrist_Roll_Pitch_08i-v1"
+    child="STS3215_03a_Wrist_Roll-v1"
+    xyz="0.0089 0.0339283 -0.04850591000000001"
+    rpy="-3.141592653589793 -9.860761315262648e-32 0.0" />
+
+  <xacro:fixed_joint name="Wrist_Roll_08c-v1_Rigid-56"
+    parent="Wrist_Roll_08c-v1"
+    child="STS3215_03a-v1-4"
+    xyz="0.012999999999999998 0.019942129999999985 -0.004906820000000014"
+    rpy="1.5707963267948966 -0.0 0.0" />
+
+  <xacro:fixed_joint name="Wrist_Roll_08c-v1_Rigid-58"
+    parent="Wrist_Roll_08c-v1"
+    child="Wrist-Camera-Mount-v11"
+    xyz="0.012999999999999998 0.027192599999999983 -0.0015258700000000047"
+    rpy="-1.5707963267948966 -0.0 0.0" />
+
+  <xacro:fixed_joint name="Wrist-Camera-Mount-v11_Rigid-71"
+    parent="Wrist-Camera-Mount-v11"
+    child="Camera-Model-v3-1"
+    xyz="0.0015500000000000004 0.00712333000000001 0.06397354"
+    rpy="1.5707963267948966 -0.0 2.181661564992912" />
+
+   <xacro:fixed_joint name="camera_optical_joint"
+    parent="Camera-Model-v3-1"
+    child="camera_optical_frame"
+    xyz="0.025 -0.017 -0.001"
+    rpy="0.0 0.0 0.0" />
+
+    <xacro:fixed_joint name="grasping_frame_joint"
+    parent="STS3215_03a-v1-4"
+    child="grasping_frame"
+    xyz="-0.02 -0.09 -0.03"
+    rpy="0 0 0" />
+
+  <!-- ======================== ACTUATED JOINTS ======================== -->
+  <!-- Continuous Joints (Actuated) -->
+  <xacro:revolute_joint name="joint1"
+    parent="STS3215_03a-v1"
+    child="Rotation_Pitch_08i-v1"
+    xyz="-0.010250000000000084 0.03459999999999999 -0.032799999999999996"
+    rpy="1.5707963267948966 -2.781046729970605e-32 3.94430452610506e-31"
+    axis="-3.944304526105059e-31 3.944304526105059e-31 1.0"
+    lower="-2.96" upper="2.96" effort="300" velocity="1" />
+
+  <xacro:revolute_joint name="joint2"
+    parent="STS3215_03a-v1-1"
+    child="SO_ARM100_08k_116_Square-v1"
+    xyz="0.0346 0.010249999999999987 -0.032799999999999975"
+    rpy="1.5707963267948966 1.7181275903033976e-32 -3.1373434374976504e-48"
+    axis="-1.0 0.0 0.0"
+    lower="-2.35" upper="2.35" effort="300" velocity="1" />
+
+  <xacro:revolute_joint name="joint3"
+    parent="STS3215_03a-v1-2"
+    child="SO_ARM100_08k_Mirror-v1"
+    xyz="0.0346 -0.013069710000000002 0.03178184000000002"
+    rpy="${M_PI} -3.4512664603419266e-31 -1.3877787807814457e-17"
+    axis="-1.0 0.0 0.0"
+    lower="0" upper="3.14" effort="300" velocity="1" />
+
+  <xacro:revolute_joint name="joint4"
+    parent="STS3215_03a-v1-3"
+    child="Wrist_Roll_Pitch_08i-v1"
+    xyz="0.0346 -0.03408158 0.004398620000000015"
+    rpy="${M_PI*1.5} 9.860761315262648e-32 -9.503163413661107e-47"
+    axis="-1.0 0.0 9.860761315262648e-32"
+    lower="-1.57" upper="2.14" effort="300" velocity="1" />
+
+  <xacro:revolute_joint name="joint5"
+    parent="STS3215_03a_Wrist_Roll-v1"
+    child="Wrist_Roll_08c-v1"
+    xyz="-0.028999999999999998 0.00810632 0.006869499999999995"
+    rpy="3.141592653589793 -0.0 0.0"
+    axis="0.0 0.42261799999999994 -0.9063079999999999"
+    lower="-3.14" upper="3.14" effort="300" velocity="1" />
+  <!-- rpy="-1.5707963267948968 3.944304526105059e-31 -1.9721522630525295e-31" -->
+  <xacro:revolute_joint name="finger_joint1"
+    parent="STS3215_03a-v1-4"
+    child="Moving_Jaw_08d-v1"
+    xyz="-0.032799999999999996 -0.023912249999999986 0.027026410000000018"
+    rpy="-2.007130025415877483 0.436331985775628373 -1.570800379727681273"
+    axis="2.74128770133849e-31 0.9063079999999999 0.422618"
+    lower="-1.5708" upper="0" effort="100" velocity="1.0" />
+
+  <!-- ROS2 Control configuration -->
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <!-- Use mock hardware for MoveIt demo without Gazebo -->
+      <plugin>mock_components/GenericSystem</plugin>
+      <param name="mock_sensor_commands">false</param>
+      <param name="state_following_offset">0.0</param>
+    </hardware>
+    <joint name="joint1">
+      <command_interface name="position">
+        <param name="min">-3.14</param>
+        <param name="max">3.14</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+
+    <joint name="joint2">
+      <command_interface name="position">
+        <param name="min">-1.57</param>
+        <param name="max">1.57</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+
+    <joint name="joint3">
+      <command_interface name="position">
+        <param name="min">-3.14</param>
+        <param name="max">3.14</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+
+    <joint name="joint4">
+      <command_interface name="position">
+        <param name="min">-1.57</param>
+        <param name="max">1.57</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+
+    <joint name="joint5">
+      <command_interface name="position">
+        <param name="min">-3.14</param>
+        <param name="max">3.14</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+
+    <joint name="finger_joint1">
+      <command_interface name="position">
+        <param name="min">-1.5708</param>
+        <param name="max">0.0</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control>
+
+</robot>

@@ -1,0 +1,53 @@
+# MoveIt uses this configuration for controller management
+
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+# capabilities:
+#   disabled:
+#     - move_group/MoveGroupPickPlaceAction
+    # - move_group/MoveGroupExecuteTrajectoryAction
+
+moveit_simple_controller_manager:
+  controller_names:
+    - arm_controller
+    - hand_controller
+
+  arm_controller:
+    type: FollowJointTrajectory
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+    action_ns: follow_joint_trajectory
+    default: true
+    action_monitor_rate: 20  # Reduced from 50 for distributed deployment (network latency)
+    wait_served_timeout: 30.0  # Increased from 10.0 for distributed deployment
+  
+  hand_controller:
+    type: FollowJointTrajectory
+    joints:
+      - finger_joint1
+    action_ns: follow_joint_trajectory
+    default: true
+    action_monitor_rate: 20  # Reduced for distributed deployment
+    wait_served_timeout: 30.0  # Increased for distributed deployment
+
+# Trajectory Execution Configuration
+# These parameters are critical for distributed deployment with network latency
+trajectory_execution:
+  allowed_execution_duration_scaling: 15.0  # Increased from 10.0 (allows 15x longer execution for network delays)
+  allowed_goal_duration_margin: 10.0  # Increased from 5.0 (extra time margin for reaching goal)
+  allowed_start_tolerance: 0.2  # Increased to 0.2 rad (~11.5°) for distributed deployment timestamp issues
+  execution_duration_monitoring: false  # Disabled for distributed deployment (bypasses 1s timestamp validation)
+  wait_for_trajectory_completion: true  # Keep enabled to ensure completion 
+
+# Planning Scene Monitor Configuration
+# Reduced update rate for distributed deployment to reduce network traffic
+planning_scene_monitor:
+  publish_planning_scene: true
+  publish_geometry_updates: true
+  publish_state_updates: true
+  publish_transforms_updates: true
+  publish_planning_scene_hz: 2.0  # Reduced from 4.0 to save network bandwidth

@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot name="lekiwi_arm">
+    <!--GROUPS: Representation of a set of joints and links-->
+    <group name="arm_grp">
+        <chain base_link="base_link" tip_link="grasping_frame" />
+    </group>
+    
+    <group name="hand_grp">
+        <joint name="finger_joint1" />
+        <link name="Moving_Jaw_08d-v1" />
+        <link name="grasping_frame" />
+    </group>
+    
+    <!--GROUP STATES: Define named states for particular groups-->
+    <group_state name="home" group="arm_grp">
+        <joint name="joint1" value="0" />
+        <joint name="joint2" value="0" />
+        <joint name="joint3" value="0" />
+        <joint name="joint4" value="0" />
+        <joint name="joint5" value="0" />
+    </group_state>
+    
+    <group_state name="forword" group="arm_grp">
+        <joint name="joint1" value="0" />
+        <joint name="joint2" value="1.2594" />
+        <joint name="joint3" value="0" />
+        <joint name="joint4" value="0" />
+        <joint name="joint5" value="-0.9368" />
+    </group_state>
+    
+    <group_state name="stop" group="arm_grp">
+        <joint name="joint1" value="0" />
+        <joint name="joint2" value="-1.7008" />
+        <joint name="joint3" value="2.997" />
+        <joint name="joint4" value="0.863" />
+        <joint name="joint5" value="1.586" />
+    </group_state>
+    
+    <group_state name="open" group="hand_grp">
+        <joint name="finger_joint1" value="0" />
+    </group_state>
+    
+    <group_state name="close" group="hand_grp">
+        <joint name="finger_joint1" value="-1.5708" />
+    </group_state>
+    
+    <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
+    <end_effector name="hand" parent_link="grasping_frame" group="hand_grp" parent_group="arm_grp" />
+    
+    <!--VIRTUAL JOINT: Purpose: this element defines a virtual joint between a robot link and an external frame of reference (considered fixed)-->
+    <virtual_joint name="virtual_joint" type="fixed" parent_frame="world" child_link="base_link" />
+    
+    <!--DISABLE COLLISIONS: Complete matrix - all 231 link pairs disabled-->
+    <disable_collisions link1="base_link" link2="base_link_physical" reason="Never" />
+    <disable_collisions link1="base_link" link2="bottom_link" reason="Never" />
+    <disable_collisions link1="base_link" link2="Camera-Model-v3-1" reason="Never" />
+    <disable_collisions link1="base_link" link2="camera_optical_frame" reason="Never" />
+    <disable_collisions link1="base_link" link2="grasping_frame" reason="Never" />
+    <disable_collisions link1="base_link" link2="Moving_Jaw_08d-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="Passive_Horn_01-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="base_link" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="base_link" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="base_link" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="base_link" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="base_link" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="base_link" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="bottom_link" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="Camera-Model-v3-1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="camera_optical_frame" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="grasping_frame" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="Moving_Jaw_08d-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="Passive_Horn_01-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="base_link_physical" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="Camera-Model-v3-1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="camera_optical_frame" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="grasping_frame" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="Moving_Jaw_08d-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="Passive_Horn_01-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="bottom_link" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="camera_optical_frame" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="grasping_frame" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="Moving_Jaw_08d-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="Passive_Horn_01-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="Camera-Model-v3-1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="grasping_frame" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="Moving_Jaw_08d-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="Passive_Horn_01-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="camera_optical_frame" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="Moving_Jaw_08d-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="Passive_Horn_01-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="grasping_frame" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="Passive_Horn_01-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="Moving_Jaw_08d-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="Rotation_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="Passive_Horn_01-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="SO_ARM100_08k_116_Square-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="Rotation_Pitch_08i-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="SO_ARM100_08k_Asym_Mirror_Clip-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_116_Square-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="SO_ARM100_08k_Mirror-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Asym_Mirror_Clip-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="STS3215_03a-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="SO_ARM100_08k_Mirror-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="STS3215_03a-v1-1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="STS3215_03a-v1-2" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-2" link2="STS3215_03a-v1-3" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-2" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-2" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-2" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-2" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-2" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-2" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-3" link2="STS3215_03a-v1-4" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-3" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-3" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-3" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-3" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-3" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-4" link2="STS3215_03a_Wrist_Roll-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-4" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-4" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-4" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a-v1-4" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a_Wrist_Roll-v1" link2="WaveShare_Mounting_Plate_01d-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a_Wrist_Roll-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="STS3215_03a_Wrist_Roll-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="STS3215_03a_Wrist_Roll-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="WaveShare_Mounting_Plate_01d-v1" link2="Wrist-Camera-Mount-v11" reason="Never" />
+    <disable_collisions link1="WaveShare_Mounting_Plate_01d-v1" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="WaveShare_Mounting_Plate_01d-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Wrist-Camera-Mount-v11" link2="Wrist_Roll_08c-v1" reason="Never" />
+    <disable_collisions link1="Wrist-Camera-Mount-v11" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" />
+    <disable_collisions link1="Wrist_Roll_08c-v1" link2="Wrist_Roll_Pitch_08i-v1" reason="Never" /></robot>
