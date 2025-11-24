@@ -202,7 +202,7 @@ def generate_launch_description():
         camera_device_arg,
         
         # Nodes and launch files
-        static_tf,                      # Static TF publisher
+        # static_tf,                      # Static TF publisher
         driver_launch,                  # Arm driver node
         delayed_robot_state_publisher,  # Robot state publisher (delayed)
         camera_launch,                  # USB camera (optional)
