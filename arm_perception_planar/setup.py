@@ -18,6 +18,9 @@ setup(
         # Launch files
         (os.path.join('share', package_name, 'launch'),
             glob('launch/*.py')),
+        # Scripts
+        (os.path.join('share', package_name, 'scripts'),
+            glob('scripts/*.sh')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -30,6 +33,7 @@ setup(
         'console_scripts': [
             'cube_detector_node = arm_perception_planar.cube_detector_node:main',
             'planar_localization_node = arm_perception_planar.planar_localization_node:main',
+            'run_planar_venv.sh = arm_perception_planar.run_planar_venv:main',
         ],
     },
 )

@@ -18,12 +18,13 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     # Include the planar perception launch file from arm_perception_planar package
+    # Use the venv-compatible version to handle NumPy compatibility issues
     planar_perception_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
                 FindPackageShare('arm_perception_planar'),
                 'launch',
-                'planar_perception.launch.py'
+                'planar_perception_venv.launch.py'  # Use venv version for NumPy 1.x compatibility
             ])
         ])
     )
