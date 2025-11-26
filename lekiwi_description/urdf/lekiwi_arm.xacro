@@ -111,8 +111,8 @@
   <xacro:fixed_joint name="bottom_joint"
     parent="base_link_physical"
     child="bottom_link"
-    xyz="0.0 0.0 0.0"
-    rpy="0.0 0.0 0.0" />
+    xyz="0.000000 0.000000 0.000000"
+    rpy="0.000000 0.000000 0.000000" />
 
   <!-- Physical base link (renamed to base_link_physical) -->
   <xacro:mesh_link name="base_link_physical"
@@ -434,128 +434,128 @@
   <xacro:fixed_joint name="Base_08q-v1_Rigid-43"
     parent="base_link_physical"
     child="WaveShare_Mounting_Plate_01d-v1"
-    xyz="-0.07525199 0.04 0.060300000000000006"
-    rpy="3.141592653589793 6.259293778842913e-51 0.7853981633974485" />
+    xyz="-0.075252 0.040000 0.060300"
+    rpy="3.141593 0.000000 0.785398" />
 
   <xacro:fixed_joint name="Base_08q-v1_Rigid-44"
     parent="base_link_physical"
     child="STS3215_03a-v1"
-    xyz="-0.045651989999999996 0.029750000000000002 0.027800000000000002"
-    rpy="1.5707963267948966 -8.851978152917189e-51 -1.5707963267948966" />
+    xyz="-0.045652 0.029750 0.027800"
+    rpy="1.570796 0.000000 -1.570796" />
 
   <xacro:fixed_joint name="Rotation_Pitch_08i-v1_Rigid-46"
     parent="Rotation_Pitch_08i-v1"
     child="SO_ARM100_08k_Asym_Mirror_Clip-v1"
-    xyz="0.023000000000000066 -0.04085 -0.023200000000000002"
-    rpy="-3.944304526105059e-31 -4.116117285135399e-31 -2.781046729970605e-32" />
+    xyz="0.023000 -0.040850 -0.023200"
+    rpy="0.000000 0.000000 0.000000" />
 
   <xacro:fixed_joint name="Base_08q-v1_Rigid-47"
     parent="base_link_physical"
     child="Passive_Horn_01-v1"
-    xyz="-0.012851990000000004 0.04 0.013599999999999994"
-    rpy="-1.5707963267948966 -8.851978152917189e-51 -1.5707963267948966" />
+    xyz="-0.012852 0.040000 0.013600"
+    rpy="-1.570796 0.000000 -1.570796" />
 
   <xacro:fixed_joint name="Rotation_Pitch_08i-v1_Rigid-48"
     parent="Rotation_Pitch_08i-v1"
     child="STS3215_03a-v1-1"
-    xyz="-0.016299999999999943 -0.04085 -0.019400000000000014"
-    rpy="1.8260247115545314e-16 -4.116117285135399e-31 -2.781046729970605e-32" />
+    xyz="-0.016300 -0.040850 -0.019400"
+    rpy="0.000000 0.000000 0.000000" />
 
   <xacro:fixed_joint name="SO_ARM100_08k_116_Square-v1_Rigid-50"
     parent="SO_ARM100_08k_116_Square-v1"
     child="STS3215_03a-v1-2"
-    xyz="-0.03610000000000001 -0.10151227 -0.013699510000000003"
-    rpy="-7.511797348558594e-34 -4.930380657631324e-32 1.3877787807814457e-17" />
+    xyz="-0.036100 -0.101512 -0.013700"
+    rpy="-0.000000 0.000000 0.000000" />
 
   <xacro:fixed_joint name="SO_ARM100_08k_Mirror-v1_Rigid-52"
     parent="SO_ARM100_08k_Mirror-v1"
     child="STS3215_03a-v1-3"
-    xyz="-0.0361 0.09885064 0.03311837999999998"
-    rpy="-3.1415926535897922 5.9164567891575885e-31 2.91703841149741e-62" />
+    xyz="-0.036100 0.098851 0.033118"
+    rpy="-3.141593 0.000000 -0.000000" />
 
   <xacro:fixed_joint name="Wrist_Roll_Pitch_08i-v1_Rigid-54"
     parent="Wrist_Roll_Pitch_08i-v1"
     child="STS3215_03a_Wrist_Roll-v1"
-    xyz="0.0089 0.0339283 -0.04850591000000001"
-    rpy="-3.141592653589793 -9.860761315262648e-32 0.0" />
+    xyz="0.008900 0.033928 -0.048506"
+    rpy="-3.141593 0.000000 0.000000" />
 
   <xacro:fixed_joint name="Wrist_Roll_08c-v1_Rigid-56"
     parent="Wrist_Roll_08c-v1"
     child="STS3215_03a-v1-4"
-    xyz="0.012999999999999998 0.019942129999999985 -0.004906820000000014"
-    rpy="1.5707963267948966 -0.0 0.0" />
+    xyz="0.013000 0.019942 -0.004907"
+    rpy="1.570796 0.000000 0.000000" />
 
   <xacro:fixed_joint name="Wrist_Roll_08c-v1_Rigid-58"
     parent="Wrist_Roll_08c-v1"
     child="Wrist-Camera-Mount-v11"
-    xyz="0.012999999999999998 0.027192599999999983 -0.0015258700000000047"
-    rpy="-1.5707963267948966 -0.0 0.0" />
+    xyz="0.013000 0.027193 -0.001526"
+    rpy="-1.570796 -0.000000 0.000000" />
 
   <xacro:fixed_joint name="Wrist-Camera-Mount-v11_Rigid-71"
     parent="Wrist-Camera-Mount-v11"
     child="Camera-Model-v3-1"
-    xyz="0.0015500000000000004 0.00712333000000001 0.06397354"
-    rpy="1.5707963267948966 -0.0 2.181661564992912" />
+    xyz="0.001550 0.007123 0.063974"
+    rpy="1.570796 0.000000 2.181662" />
 
    <xacro:fixed_joint name="camera_optical_joint"
     parent="Camera-Model-v3-1"
     child="camera_optical_frame"
-    xyz="0.025 -0.017 -0.001"
-    rpy="0.0 0.0 0.0" />
+    xyz="0.025000 -0.017000 -0.001000"
+    rpy="0.000000 0.000000 0.000000" />
 
     <xacro:fixed_joint name="grasping_frame_joint"
     parent="STS3215_03a-v1-4"
     child="grasping_frame"
-    xyz="-0.02 -0.09 -0.03"
-    rpy="0 0 0" />
+    xyz="-0.020000 -0.090000 -0.030000"
+    rpy="0.000000 0.000000 0.000000" />
 
   <!-- ======================== ACTUATED JOINTS ======================== -->
   <!-- Continuous Joints (Actuated) -->
   <xacro:revolute_joint name="joint1"
     parent="STS3215_03a-v1"
     child="Rotation_Pitch_08i-v1"
-    xyz="-0.010250000000000084 0.03459999999999999 -0.032799999999999996"
-    rpy="1.5707963267948966 -2.781046729970605e-32 3.94430452610506e-31"
+    xyz="-0.010250 0.034600 -0.032800"
+    rpy="1.570796 0.001534 -0.000000"
     axis="-3.944304526105059e-31 3.944304526105059e-31 1.0"
     lower="-2.96" upper="2.96" effort="300" velocity="1" />
 
   <xacro:revolute_joint name="joint2"
     parent="STS3215_03a-v1-1"
     child="SO_ARM100_08k_116_Square-v1"
-    xyz="0.0346 0.010249999999999987 -0.032799999999999975"
-    rpy="1.5707963267948966 1.7181275903033976e-32 -3.1373434374976504e-48"
+    xyz="0.034600 0.010250 -0.032800"
+    rpy="1.739534 0.000000 0.000000"
     axis="-1.0 0.0 0.0"
     lower="-2.35" upper="2.35" effort="300" velocity="1" />
 
   <xacro:revolute_joint name="joint3"
     parent="STS3215_03a-v1-2"
     child="SO_ARM100_08k_Mirror-v1"
-    xyz="0.0346 -0.013069710000000002 0.03178184000000002"
-    rpy="${M_PI} -3.4512664603419266e-31 -1.3877787807814457e-17"
+    xyz="0.034600 -0.013070 0.031782"
+    rpy="2.893088 -0.000000 -0.000000"
     axis="-1.0 0.0 0.0"
     lower="0" upper="3.14" effort="300" velocity="1" />
 
   <xacro:revolute_joint name="joint4"
     parent="STS3215_03a-v1-3"
     child="Wrist_Roll_Pitch_08i-v1"
-    xyz="0.0346 -0.03408158 0.004398620000000015"
-    rpy="${M_PI*1.5} 9.860761315262648e-32 -9.503163413661107e-47"
+    xyz="0.034600 -0.034082 0.004399"
+    rpy="-1.856117 0.000000 0.000000"
     axis="-1.0 0.0 9.860761315262648e-32"
     lower="-1.57" upper="2.14" effort="300" velocity="1" />
 
   <xacro:revolute_joint name="joint5"
     parent="STS3215_03a_Wrist_Roll-v1"
     child="Wrist_Roll_08c-v1"
-    xyz="-0.028999999999999998 0.00810632 0.006869499999999995"
-    rpy="3.141592653589793 -0.0 0.0"
+    xyz="-0.029000 0.008106 0.006870"
+    rpy="3.140229 -0.035621 0.076497"
     axis="0.0 0.42261799999999994 -0.9063079999999999"
     lower="-3.14" upper="3.14" effort="300" velocity="1" />
   <!-- rpy="-1.5707963267948968 3.944304526105059e-31 -1.9721522630525295e-31" -->
   <xacro:revolute_joint name="finger_joint1"
     parent="STS3215_03a-v1-4"
     child="Moving_Jaw_08d-v1"
-    xyz="-0.032799999999999996 -0.023912249999999986 0.027026410000000018"
-    rpy="-2.007130025415877483 0.436331985775628373 -1.570800379727681273"
+    xyz="-0.032800 -0.023912 0.027026"
+    rpy="-2.008561 0.436330 -1.574185"
     axis="2.74128770133849e-31 0.9063079999999999 0.422618"
     lower="-1.5708" upper="0" effort="100" velocity="1.0" />
 
