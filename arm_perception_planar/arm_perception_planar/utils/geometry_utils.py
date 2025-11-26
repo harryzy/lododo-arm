@@ -329,7 +329,10 @@ def detect_edges(image: np.ndarray,
     """
     if use_color_seg and len(image.shape) == 3:
         # Automatic color segmentation: detect all distinct color regions
-        color_masks = segment_color_regions(image, 
+        if logger:
+            logger.info(f'Color segmentation: n_colors={n_colors}, min_saturation={min_saturation}, min_region_pixels={min_region_pixels}, max_region_pixels={max_region_pixels}')
+        
+        color_masks = segment_color_regions(image,
                                            n_colors=n_colors,
                                            min_saturation=min_saturation,
                                            min_region_pixels=min_region_pixels,
@@ -340,12 +343,16 @@ def detect_edges(image: np.ndarray,
         
         # Combine all color masks
         if len(color_masks) > 0:
+            if logger:
+                logger.info(f'Color segmentation successful: found {len(color_masks)} valid color regions')
             combined_mask = color_masks[0].copy()
             for mask in color_masks[1:]:
                 combined_mask = cv2.bitwise_or(combined_mask, mask)
             return combined_mask
         else:
             # Fallback to traditional edge detection if no color regions found
+            if logger:
+                logger.warning('Color segmentation failed: no valid color regions found, falling back to traditional edge detection')
             pass
     
     # Traditional edge detection (fallback or when use_color_seg=False)
@@ -473,11 +480,17 @@ def find_cube_contours(image: np.ndarray,
         )
     
     # Contour extraction
-    contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, 
+    contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL,
                                           cv2.CHAIN_APPROX_SIMPLE)
     
     if logger:
-        logger.debug(f'Found {len(contours)} total contours')
+        logger.info(f'Edge detection completed: found {len(contours)} total contours')
+        if len(contours) == 0:
+            logger.warning('No contours found in edge image - check edge detection parameters')
+            # Log edge image statistics for debugging
+            edge_pixels = np.sum(edges > 0)
+            total_pixels = edges.shape[0] * edges.shape[1]
+            logger.info(f'Edge image: {edge_pixels}/{total_pixels} pixels are edges ({edge_pixels/total_pixels*100:.1f}%)')
     
     results = []
     filtered_count = 0
@@ -487,9 +500,16 @@ def find_cube_contours(image: np.ndarray,
         area = cv2.contourArea(contour)
         perimeter = cv2.arcLength(contour, True)
         
-        if area < geom_params['min_area'] or area > geom_params['max_area']:
-            if debug and logger:  # Show ALL contours rejected by area
-                logger.debug(f'Contour {i}: area={area:.0f} REJECTED by area filter (range: {geom_params["min_area"]}-{geom_params["max_area"]})')
+        if logger:
+            logger.info(f'Processing contour {i}: area={area:.0f}, perimeter={perimeter:.1f}')
+        
+        if area < geom_params['min_area']:
+            if logger:  # Show ALL contours rejected by area
+                logger.info(f'Contour {i}: area={area:.0f} REJECTED - too small (min: {geom_params["min_area"]})')
+            continue
+        elif area > geom_params['max_area']:
+            if logger:  # Show ALL contours rejected by area
+                logger.info(f'Contour {i}: area={area:.0f} REJECTED - too large (max: {geom_params["max_area"]})')
             continue
         
         # Bounding box
@@ -506,7 +526,7 @@ def find_cube_contours(image: np.ndarray,
         approx = approximate_polygon(contour)
         vertices = len(approx)
         
-        if debug and logger:
+        if logger:
             logger.debug(f'Contour {i}: area={area:.0f}, aspect={aspect_ratio:.2f}, solidity={solidity:.2f}, vertices={vertices}')
         
         # Check if cube-like
@@ -526,8 +546,8 @@ def find_cube_contours(image: np.ndarray,
             # Center point
             center = get_contour_center(contour)
             
-            if debug and logger:
-                logger.debug(f'Contour {i}: ACCEPTED with confidence={confidence:.2f}')
+            if logger:
+                logger.info(f'Contour {i}: ACCEPTED as cube with confidence={confidence:.2f}')
             
             results.append({
                 'contour': contour,
@@ -540,7 +560,7 @@ def find_cube_contours(image: np.ndarray,
                 'vertices': vertices
             })
         else:
-            if debug and logger:
+            if logger:
                 filtered_count += 1
                 # Show why it was rejected
                 checks = []
@@ -555,7 +575,29 @@ def find_cube_contours(image: np.ndarray,
                 logger.debug(f'Contour {i}: REJECTED - failed checks: {", ".join(checks)}')
     
     if logger:
-        logger.debug(f'Total: {len(contours)} contours, {len(results)} passed, {filtered_count} rejected')
+        logger.info(f'Contour filtering completed: {len(contours)} total, {len(results)} accepted as cubes, {filtered_count} rejected')
+        if len(results) == 0 and len(contours) > 0:
+            # 分析面积分布，提供智能建议
+            areas = []
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                areas.append(area)
+            
+            if areas:
+                min_area = min(areas)
+                max_area = max(areas)
+                avg_area = sum(areas) / len(areas)
+                logger.warning(f'No cubes detected - all contours were filtered out.')
+                logger.info(f'Area statistics: min={min_area:.0f}, max={max_area:.0f}, avg={avg_area:.0f}')
+                
+                # 提供智能建议
+                if max_area < geom_params['min_area']:
+                    logger.info(f'SUGGESTION: All contours are too small. Reduce min_area from {geom_params["min_area"]} to around {max_area*0.8:.0f}')
+                elif min_area > geom_params['max_area']:
+                    logger.info(f'SUGGESTION: All contours are too large. Increase max_area from {geom_params["max_area"]} to around {min_area*1.2:.0f}')
+                else:
+                    logger.info(f'SUGGESTION: Try adjusting area range to include values around {avg_area:.0f}')
+                    logger.info(f'Consider range: {min_area*0.8:.0f}-{max_area*1.2:.0f}')
     
     # Draw accepted contours on debug image
     if debug and debug_image is not None:

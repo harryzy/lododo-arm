@@ -32,6 +32,7 @@ def generate_launch_description():
         name='cube_detector',
         output='screen',
         parameters=[config_file],
+        arguments=['--ros-args', '--log-level', 'debug'],
         remappings=[
             ('/camera/image_raw', '/camera/image_raw'),
         ]

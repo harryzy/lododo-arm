@@ -16,6 +16,7 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 import json
+import os
 from typing import List, Dict
 
 # Import utility modules
@@ -44,7 +45,46 @@ class CubeDetectorNode(Node):
     def __init__(self):
         super().__init__('cube_detector_node')
         
-        # Declare parameters
+        # Check for preloaded parameters from venv wrapper
+        preload_params = os.environ.get('PLANAR_PRELOAD_PARAMS')
+        preloaded_geom_params = {}
+        preloaded_edge_params = {}
+        preloaded_color_seg_params = {}
+        preloaded_min_confidence = None
+        
+        if preload_params:
+            try:
+                params_dict = json.loads(preload_params)
+                self.get_logger().info(f'Found preloaded parameters: {list(params_dict.keys())}')
+                
+                if 'cube_detection' in params_dict:
+                    cube_params = params_dict['cube_detection']
+                    
+                    # Extract geometry thresholds
+                    if 'geometry_thresholds' in cube_params:
+                        preloaded_geom_params = cube_params['geometry_thresholds'].copy()
+                        self.get_logger().info(f'Preloaded geometry thresholds: {preloaded_geom_params}')
+                    
+                    # Extract edge detection params
+                    if 'edge_detection' in cube_params:
+                        preloaded_edge_params = cube_params['edge_detection'].copy()
+                        self.get_logger().info(f'Preloaded edge detection params: {preloaded_edge_params}')
+                    
+                    # Extract color segmentation params
+                    if 'color_segmentation' in cube_params:
+                        preloaded_color_seg_params = cube_params['color_segmentation'].copy()
+                        self.get_logger().info(f'Preloaded color segmentation params: {preloaded_color_seg_params}')
+                    
+                    # Extract min confidence
+                    if 'min_confidence' in cube_params:
+                        preloaded_min_confidence = cube_params['min_confidence']
+                        self.get_logger().info(f'Preloaded min confidence: {preloaded_min_confidence}')
+                
+                self.get_logger().info('Successfully loaded preloaded parameters from venv wrapper')
+            except Exception as e:
+                self.get_logger().warn(f'Failed to parse preloaded parameters: {e}')
+        
+        # Declare parameters with preloaded values as defaults
         self.declare_parameters(
             namespace='',
             parameters=[
@@ -53,29 +93,46 @@ class CubeDetectorNode(Node):
                 ('cube_detection.size_tolerance', 0.015),
                 
                 # Geometric feature thresholds
-                ('cube_detection.geometry_thresholds.min_area', 2000),
-                ('cube_detection.geometry_thresholds.max_area', 15000),
-                ('cube_detection.geometry_thresholds.min_aspect_ratio', 0.75),
-                ('cube_detection.geometry_thresholds.max_aspect_ratio', 1.33),
-                ('cube_detection.geometry_thresholds.min_solidity', 0.85),
-                ('cube_detection.geometry_thresholds.expected_vertices', 4),
-                ('cube_detection.geometry_thresholds.vertex_tolerance', 1),
+                ('cube_detection.geometry_thresholds.min_area',
+                 preloaded_geom_params.get('min_area', 2000)),
+                ('cube_detection.geometry_thresholds.max_area',
+                 preloaded_geom_params.get('max_area', 15000)),
+                ('cube_detection.geometry_thresholds.min_aspect_ratio',
+                 preloaded_geom_params.get('min_aspect_ratio', 0.75)),
+                ('cube_detection.geometry_thresholds.max_aspect_ratio',
+                 preloaded_geom_params.get('max_aspect_ratio', 1.33)),
+                ('cube_detection.geometry_thresholds.min_solidity',
+                 preloaded_geom_params.get('min_solidity', 0.85)),
+                ('cube_detection.geometry_thresholds.expected_vertices',
+                 preloaded_geom_params.get('expected_vertices', 4)),
+                ('cube_detection.geometry_thresholds.vertex_tolerance',
+                 preloaded_geom_params.get('vertex_tolerance', 1)),
                 
                 # Edge detection parameters
-                ('cube_detection.edge_detection.use_color_segmentation', True),
-                ('cube_detection.edge_detection.canny_threshold1', 50),
-                ('cube_detection.edge_detection.canny_threshold2', 150),
-                ('cube_detection.edge_detection.gaussian_blur_size', 5),
-                ('cube_detection.edge_detection.morph_kernel_size', 3),
+                ('cube_detection.edge_detection.use_color_segmentation',
+                 preloaded_edge_params.get('use_color_segmentation', True)),
+                ('cube_detection.edge_detection.canny_threshold1',
+                 preloaded_edge_params.get('canny_threshold1', 50)),
+                ('cube_detection.edge_detection.canny_threshold2',
+                 preloaded_edge_params.get('canny_threshold2', 150)),
+                ('cube_detection.edge_detection.gaussian_blur_size',
+                 preloaded_edge_params.get('gaussian_blur_size', 5)),
+                ('cube_detection.edge_detection.morph_kernel_size',
+                 preloaded_edge_params.get('morph_kernel_size', 3)),
                 
                 # Color segmentation parameters
-                ('cube_detection.color_segmentation.n_colors', 8),
-                ('cube_detection.color_segmentation.min_saturation', 30),
-                ('cube_detection.color_segmentation.min_region_pixels', 500),
-                ('cube_detection.color_segmentation.max_region_pixels', 50000),
+                ('cube_detection.color_segmentation.n_colors',
+                 preloaded_color_seg_params.get('n_colors', 8)),
+                ('cube_detection.color_segmentation.min_saturation',
+                 preloaded_color_seg_params.get('min_saturation', 30)),
+                ('cube_detection.color_segmentation.min_region_pixels',
+                 preloaded_color_seg_params.get('min_region_pixels', 500)),
+                ('cube_detection.color_segmentation.max_region_pixels',
+                 preloaded_color_seg_params.get('max_region_pixels', 50000)),
                 
                 # Confidence threshold
-                ('cube_detection.min_confidence', 0.6),
+                ('cube_detection.min_confidence',
+                 preloaded_min_confidence if preloaded_min_confidence is not None else 0.6),
                 
                 # Detection mode: "continuous" or "triggered"
                 ('detection_mode', 'triggered'),
@@ -157,6 +214,12 @@ class CubeDetectorNode(Node):
         self.get_logger().info(f'Detection mode: {self.detection_mode}')
         self.get_logger().info(f'Min confidence: {self.min_confidence}')
         self.get_logger().info(f'Area range: {self.geom_params["min_area"]}-{self.geom_params["max_area"]}')
+        self.get_logger().info(f'Aspect ratio range: {self.geom_params["min_aspect_ratio"]}-{self.geom_params["max_aspect_ratio"]}')
+        self.get_logger().info(f'Min solidity: {self.geom_params["min_solidity"]}')
+        self.get_logger().info(f'Expected vertices: {self.geom_params["expected_vertices"]}±{self.geom_params["vertex_tolerance"]}')
+        self.get_logger().info(f'Color segmentation: {self.edge_params["use_color_segmentation"]}')
+        if self.edge_params["use_color_segmentation"]:
+            self.get_logger().info(f'Color params: n_colors={self.color_seg_params["n_colors"]}, min_saturation={self.color_seg_params["min_saturation"]}, region_pixels={self.color_seg_params["min_region_pixels"]}-{self.color_seg_params["max_region_pixels"]}')
     
     def _load_parameters(self):
         """Load all parameters"""

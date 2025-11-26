@@ -18,6 +18,7 @@ from shape_msgs.msg import SolidPrimitive
 from cv_bridge import CvBridge
 import numpy as np
 import json
+import os
 from typing import List, Optional
 
 # Custom messages
@@ -58,48 +59,92 @@ class PlanarLocalizationNode(Node):
     def __init__(self):
         super().__init__('planar_localization_node')
         
-        # Declare parameters
+        # Check for preloaded parameters from venv wrapper
+        preload_params = os.environ.get('PLANAR_PRELOAD_PARAMS')
+        preloaded_camera_matrix = {}
+        preloaded_camera_pose = {}
+        preloaded_localization_params = {}
+        preloaded_scene_params = {}
+        preloaded_expected_size = 0.050  # Default 5cm
+        
+        if preload_params:
+            try:
+                params_dict = json.loads(preload_params)
+                self.get_logger().info(f'Found preloaded parameters: {list(params_dict.keys())}')
+                
+                # Extract camera matrix
+                if 'camera_matrix' in params_dict:
+                    preloaded_camera_matrix = params_dict['camera_matrix'].copy()
+                    self.get_logger().info(f'Preloaded camera matrix: {preloaded_camera_matrix}')
+                
+                # Extract camera pose
+                if 'camera_pose' in params_dict:
+                    preloaded_camera_pose = params_dict['camera_pose'].copy()
+                    self.get_logger().info(f'Preloaded camera pose: {preloaded_camera_pose}')
+                
+                # Extract localization params
+                if 'localization' in params_dict:
+                    preloaded_localization_params = params_dict['localization'].copy()
+                    self.get_logger().info(f'Preloaded localization params: {preloaded_localization_params}')
+                
+                # Extract scene params
+                if 'scene' in params_dict:
+                    preloaded_scene_params = params_dict['scene'].copy()
+                    self.get_logger().info(f'Preloaded scene params: {preloaded_scene_params}')
+                
+                # Extract cube size from cube_detection
+                if 'cube_detection' in params_dict and 'expected_size' in params_dict['cube_detection']:
+                    preloaded_expected_size = params_dict['cube_detection']['expected_size']
+                    self.get_logger().info(f'Preloaded expected cube size: {preloaded_expected_size}')
+                
+                self.get_logger().info('Successfully loaded preloaded parameters from venv wrapper')
+            except Exception as e:
+                self.get_logger().warn(f'Failed to parse preloaded parameters: {e}')
+        
+        # Declare parameters with preloaded values as defaults
         self.declare_parameters(
             namespace='',
             parameters=[
-                # Camera calibration
+                # Camera calibration - use preloaded values if available
                 ('use_calibrated_camera_params', True),
-                ('camera_matrix.fx', 572.70774),
-                ('camera_matrix.fy', 612.22574),
-                ('camera_matrix.cx', 330.25436),
-                ('camera_matrix.cy', 259.5),  # Precise Y-axis calibration (was 249.0)
-                ('camera_pose.translation.x', -0.2745),
-                ('camera_pose.translation.y', -0.0080),
-                ('camera_pose.translation.z', 0.1055),
-                ('camera_pose.rotation.pitch', 97.75),
-                ('camera_pose.rotation.roll', 0.0),
-                ('camera_pose.rotation.yaw', 0.0),
+                ('camera_matrix.fx', preloaded_camera_matrix.get('fx', 572.70774)),
+                ('camera_matrix.fy', preloaded_camera_matrix.get('fy', 612.22574)),
+                ('camera_matrix.cx', preloaded_camera_matrix.get('cx', 330.25436)),
+                ('camera_matrix.cy', preloaded_camera_matrix.get('cy', 259.5)),
                 
-                # Plane parameters
-                ('table_height', 0.0),
-                ('table_height_offset', 0.002),
+                # Camera pose - use preloaded values if available
+                ('camera_pose.translation.x', preloaded_camera_pose.get('translation', {}).get('x', -0.2745)),
+                ('camera_pose.translation.y', preloaded_camera_pose.get('translation', {}).get('y', -0.0080)),
+                ('camera_pose.translation.z', preloaded_camera_pose.get('translation', {}).get('z', 0.1055)),
+                ('camera_pose.rotation.pitch', preloaded_camera_pose.get('rotation', {}).get('pitch', 97.75)),
+                ('camera_pose.rotation.roll', preloaded_camera_pose.get('rotation', {}).get('roll', 0.0)),
+                ('camera_pose.rotation.yaw', preloaded_camera_pose.get('rotation', {}).get('yaw', 0.0)),
                 
-                # Cube size
-                ('cube_detection.expected_size', 0.050),
+                # Plane parameters - use preloaded values if available
+                ('table_height', preloaded_localization_params.get('table_height', 0.0)),
+                ('table_height_offset', preloaded_localization_params.get('table_height_offset', 0.002)),
                 
-                # Localization parameters
-                ('localization.enable_size_validation', True),
-                ('localization.size_validation_tolerance', 0.015),
-                ('localization.position_correction.x', 0.0),
-                ('localization.position_correction.y', 0.0),
-                ('localization.position_correction.z', 0.03),
-                ('localization.min_depth', 0.20),
-                ('localization.max_depth', 0.80),
-                ('localization.y_min', -0.02),
-                ('localization.y_max', 0.02),
+                # Cube size - use preloaded value if available
+                ('cube_detection.expected_size', preloaded_expected_size),
+                
+                # Localization parameters - use preloaded values if available
+                ('localization.enable_size_validation', preloaded_localization_params.get('enable_size_validation', True)),
+                ('localization.size_validation_tolerance', preloaded_localization_params.get('size_validation_tolerance', 0.015)),
+                ('localization.position_correction.x', preloaded_localization_params.get('position_correction', {}).get('x', 0.0)),
+                ('localization.position_correction.y', preloaded_localization_params.get('position_correction', {}).get('y', 0.0)),
+                ('localization.position_correction.z', preloaded_localization_params.get('position_correction', {}).get('z', 0.03)),
+                ('localization.min_depth', preloaded_localization_params.get('min_depth', 0.20)),
+                ('localization.max_depth', preloaded_localization_params.get('max_depth', 0.80)),
+                ('localization.y_min', preloaded_localization_params.get('y_min', -0.02)),
+                ('localization.y_max', preloaded_localization_params.get('y_max', 0.02)),
                 
                 # Visualization
                 ('visualization.enable_rviz_markers', True),
                 ('visualization.marker_lifetime', 2.0),
                 
-                # Scene object (MoveIt)
-                ('scene.object_id', 'detected_cube'),
-                ('scene.publish_box', True),
+                # Scene object (MoveIt) - use preloaded values if available
+                ('scene.object_id', preloaded_scene_params.get('object_id', 'detected_cube')),
+                ('scene.publish_box', preloaded_scene_params.get('publish_box', True)),
             ]
         )
         

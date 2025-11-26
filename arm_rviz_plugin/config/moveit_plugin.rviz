@@ -8,10 +8,11 @@ Panels:
         - /Status1
         - /MotionPlanning1
         - /TF1
+        - /TF1/Frames1
         - /TF1/Tree1
         - /Image1
       Splitter Ratio: 0.5
-    Tree Height: 70
+    Tree Height: 78
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -64,21 +65,105 @@ Visualization Manager:
       Enabled: true
       Links:
         All Links Enabled: true
+        Camera-Model-v3-1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        Moving_Jaw_08d-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        Passive_Horn_01-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        Rotation_Pitch_08i-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        SO_ARM100_08k_116_Square-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        SO_ARM100_08k_Asym_Mirror_Clip-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        SO_ARM100_08k_Mirror-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        STS3215_03a-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        STS3215_03a-v1-1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        STS3215_03a-v1-2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        STS3215_03a-v1-3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        STS3215_03a-v1-4:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        STS3215_03a_Wrist_Roll-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        WaveShare_Mounting_Plate_01d-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        Wrist-Camera-Mount-v11:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        Wrist_Roll_08c-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        Wrist_Roll_Pitch_08i-v1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_link_physical:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
         bottom_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        camera_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -91,41 +176,6 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        gripper_finger_link1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        gripper_finger_link2:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link2:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link3:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link4:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link5:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -161,21 +211,105 @@ Visualization Manager:
         Interrupt Display: false
         Links:
           All Links Enabled: true
+          Camera-Model-v3-1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           Expand Joint Details: false
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          Moving_Jaw_08d-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Passive_Horn_01-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Rotation_Pitch_08i-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          SO_ARM100_08k_116_Square-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          SO_ARM100_08k_Asym_Mirror_Clip-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          SO_ARM100_08k_Mirror-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-2:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-3:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-4:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a_Wrist_Roll-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          WaveShare_Mounting_Plate_01d-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Wrist-Camera-Mount-v11:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Wrist_Roll_08c-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Wrist_Roll_Pitch_08i-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           base_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          base_link_physical:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
           bottom_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          camera_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -188,41 +322,6 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          gripper_finger_link1:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          gripper_finger_link2:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link1:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link2:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link3:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link4:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link5:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
         Loop Animation: false
         Robot Alpha: 0.5
         Robot Color: 150; 50; 150
@@ -265,21 +364,105 @@ Visualization Manager:
         Attached Body Color: 150; 50; 150
         Links:
           All Links Enabled: true
+          Camera-Model-v3-1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           Expand Joint Details: false
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          Moving_Jaw_08d-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Passive_Horn_01-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Rotation_Pitch_08i-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          SO_ARM100_08k_116_Square-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          SO_ARM100_08k_Asym_Mirror_Clip-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          SO_ARM100_08k_Mirror-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-2:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-3:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a-v1-4:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          STS3215_03a_Wrist_Roll-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          WaveShare_Mounting_Plate_01d-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Wrist-Camera-Mount-v11:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Wrist_Roll_08c-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          Wrist_Roll_Pitch_08i-v1:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           base_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          base_link_physical:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
           bottom_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          camera_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -292,41 +475,6 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          gripper_finger_link1:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          gripper_finger_link2:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link1:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link2:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link3:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link4:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link5:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
         Robot Alpha: 1
         Show Robot Collision: false
         Show Robot Visual: true
@@ -337,31 +485,49 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        base_link:
-          Value: true
-        bottom_link:
+        Camera-Model-v3-1:
           Value: false
-        camera_link:
+        Moving_Jaw_08d-v1:
+          Value: false
+        Passive_Horn_01-v1:
+          Value: false
+        Rotation_Pitch_08i-v1:
+          Value: false
+        SO_ARM100_08k_116_Square-v1:
+          Value: false
+        SO_ARM100_08k_Asym_Mirror_Clip-v1:
+          Value: false
+        SO_ARM100_08k_Mirror-v1:
+          Value: false
+        STS3215_03a-v1:
+          Value: false
+        STS3215_03a-v1-1:
+          Value: false
+        STS3215_03a-v1-2:
+          Value: false
+        STS3215_03a-v1-3:
+          Value: false
+        STS3215_03a-v1-4:
+          Value: false
+        STS3215_03a_Wrist_Roll-v1:
+          Value: false
+        WaveShare_Mounting_Plate_01d-v1:
+          Value: false
+        Wrist-Camera-Mount-v11:
+          Value: false
+        Wrist_Roll_08c-v1:
+          Value: false
+        Wrist_Roll_Pitch_08i-v1:
+          Value: false
+        base_link:
+          Value: false
+        base_link_physical:
+          Value: false
+        bottom_link:
           Value: false
         camera_optical_frame:
           Value: false
         grasping_frame:
-          Value: false
-        gripper_finger_link1:
-          Value: false
-        gripper_finger_link2:
-          Value: false
-        link1:
-          Value: false
-        link2:
-          Value: false
-        link3:
-          Value: false
-        link4:
-          Value: false
-        link5:
-          Value: false
-        world:
           Value: true
       Marker Scale: 1
       Name: TF
@@ -369,24 +535,35 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        world:
-          base_link:
+        base_link:
+          base_link_physical:
+            Passive_Horn_01-v1:
+              {}
+            STS3215_03a-v1:
+              Rotation_Pitch_08i-v1:
+                SO_ARM100_08k_Asym_Mirror_Clip-v1:
+                  {}
+                STS3215_03a-v1-1:
+                  SO_ARM100_08k_116_Square-v1:
+                    STS3215_03a-v1-2:
+                      SO_ARM100_08k_Mirror-v1:
+                        STS3215_03a-v1-3:
+                          Wrist_Roll_Pitch_08i-v1:
+                            STS3215_03a_Wrist_Roll-v1:
+                              Wrist_Roll_08c-v1:
+                                STS3215_03a-v1-4:
+                                  Moving_Jaw_08d-v1:
+                                    {}
+                                  grasping_frame:
+                                    {}
+                                Wrist-Camera-Mount-v11:
+                                  Camera-Model-v3-1:
+                                    camera_optical_frame:
+                                      {}
+            WaveShare_Mounting_Plate_01d-v1:
+              {}
             bottom_link:
               {}
-            link1:
-              link2:
-                link3:
-                  link4:
-                    link5:
-                      camera_link:
-                        camera_optical_frame:
-                          {}
-                      grasping_frame:
-                        {}
-                      gripper_finger_link1:
-                        {}
-                      gripper_finger_link2:
-                        {}
       Update Interval: 0
       Value: true
     - Class: rviz_default_plugins/Image
@@ -464,17 +641,17 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.615000307559967
+      Pitch: 0.010000364854931831
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 0.13500019907951355
+      Yaw: 1.549999713897705
     Saved: ~
 Window Geometry:
   ArmControlPanel:
     collapsed: false
   Displays:
     collapsed: false
-  Height: 1016
+  Height: 1054
   Hide Left Dock: false
   Hide Right Dock: false
   Image:
@@ -483,13 +660,13 @@ Window Geometry:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000001f30000039efc0200000006fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000004100fffffffb0000000a0049006d006100670065010000003d000001750000002800fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e006701000001b8000002230000017d00ffffff00000001000002270000039efc0200000004fb0000001e0054006f006f006c002000500072006f007000650072007400690065007301000000410000006e0000000000000000fb000000100044006900730070006c006100790073010000003d000000c9000000c900fffffffc0000010c000002cf000002940100001cfa000000000100000002fb0000001e00410072006d0043006f006e00740072006f006c00500061006e0065006c0100000000ffffffff0000011d00fffffffb0000000a005600690065007700730100000513000002270000010000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007800000003efc0100000002fb0000000800540069006d00650100000000000007800000000000000000fb0000000800540069006d00650100000000000004500000000000000000000001450000039e00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000001f3000003c4fc0200000006fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000004100fffffffb0000000a0049006d006100670065010000003d000001840000002800fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e006701000001c70000023a0000017d00ffffff0000000100000227000003c4fc0200000004fb0000001e0054006f006f006c002000500072006f007000650072007400690065007301000000410000006e0000000000000000fb000000100044006900730070006c006100790073010000003d000000d1000000c900fffffffc00000114000002ed000002940100001cfa000000000100000002fb0000001e00410072006d0043006f006e00740072006f006c00500061006e0065006c0100000000ffffffff0000011d00fffffffb0000000a005600690065007700730100000513000002270000010000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007800000003efc0100000002fb0000000800540069006d00650100000000000007800000000000000000fb0000000800540069006d0065010000000000000450000000000000000000000250000003c400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Tool Properties:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1387
+  Width: 1654
   X: 215
   Y: 27
