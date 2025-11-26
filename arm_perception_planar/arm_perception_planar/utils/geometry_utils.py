@@ -3,7 +3,7 @@
 Geometry utility functions for shape detection and analysis
 """
 
-import cv2
+import cv2 # type: ignore
 import numpy as np
 from typing import Tuple, List, Dict, Optional
 

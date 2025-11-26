@@ -13,7 +13,7 @@ from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from std_msgs.msg import Header, String
 from cv_bridge import CvBridge
-import cv2
+import cv2 # type: ignore
 import numpy as np
 import json
 import os

@@ -3,7 +3,7 @@
 Visualization utilities for debugging and display
 """
 
-import cv2
+import cv2 # type: ignore
 import numpy as np
 from typing import List, Dict, Tuple
 from geometry_msgs.msg import Point

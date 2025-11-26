@@ -31,7 +31,7 @@ except ImportError:
 
 # Import utility modules
 from arm_perception_planar.utils import CameraModel, create_marker_array, draw_3d_info
-import cv2
+import cv2 # type: ignore
 
 
 class PlanarLocalizationNode(Node):
