@@ -502,7 +502,7 @@
     child="camera_optical_frame"
     xyz="0.025000 -0.017000 -0.001000"
     rpy="0.000000 0.000000 0.000000" />
-
+    <!-- fixed rpy="0.079688 ${-0.285828-M_PI} 1.584010"  -->
     <xacro:fixed_joint name="grasping_frame_joint"
     parent="STS3215_03a-v1-4"
     child="grasping_frame"
