@@ -502,21 +502,12 @@
     child="camera_optical_frame"
     xyz="0.025000 -0.017000 -0.001000"
     rpy="0.000000 0.000000 0.000000" />
-    
-    <!-- ORIGINAL grasping_frame_joint (backup - parent was STS3215_03a-v1-4):
+
     <xacro:fixed_joint name="grasping_frame_joint"
-      parent="STS3215_03a-v1-4"
-      child="grasping_frame"
-      xyz="-0.020000 -0.090000 -0.030000"
-      rpy="0.079688 ${-0.285828-M_PI} 1.584010" />
-    -->
-    <!-- NEW: grasping_frame now attached to Wrist_Roll_08c-v1 (joint5's child)
-         so that grasping_frame rotates WITH joint5, giving IK control over end-effector orientation -->
-    <xacro:fixed_joint name="grasping_frame_joint"
-    parent="Wrist_Roll_08c-v1"
+    parent="STS3215_03a-v1-4"
     child="grasping_frame"
-    xyz="-0.007000 0.049942 -0.094907"
-    rpy="0.032855 1.284672 1.525864" />
+    xyz="-0.020000 -0.090000 -0.030000"
+    rpy="0.079688 ${-0.285828-M_PI} 1.584010" />
 
   <!-- ======================== ACTUATED JOINTS ======================== -->
   <!-- Continuous Joints (Actuated) -->
