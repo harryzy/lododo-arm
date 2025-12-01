@@ -784,6 +784,15 @@ class ArmPlanningPyNode(Node):
         )
         return False
 
+    def _clear_joint5_constraint_if_locked(self, lock_joint5: bool):
+        """Clear path constraints if joint5 was locked"""
+        if lock_joint5:
+            try:
+                self.arm.clear_path_constraints()
+                self.get_logger().debug("🔓 Cleared joint5 path constraint")
+            except Exception as e:
+                self.get_logger().warn(f"⚠️ Failed to clear path constraints: {e}")
+
     def move_arm_to_pose(
         self,
         position: list[float],
@@ -794,6 +803,8 @@ class ArmPlanningPyNode(Node):
         max_step=0.01,
         cartesian_fraction_threshold=0.0,
         wait=True,
+        lock_joint5: bool = True,
+        joint5_tolerance: float = 0.05,
     ):
         """
         Move arm to specified pose
@@ -803,7 +814,8 @@ class ArmPlanningPyNode(Node):
             orientation (list): target orientation，quaternion representation [x, y, z, w]
             cartesian (bool): whether to use Cartesian path planning (straight line motion)
             wait (bool): whether to wait for execution to complete
-            timeout (float): execution timeout time, unit is seconds
+            lock_joint5 (bool): whether to lock joint5 orientation during motion (default: True)
+            joint5_tolerance (float): tolerance for joint5 constraint in radians (default: 0.05)
 
         return:
             bool: whether execution succeeded
@@ -819,22 +831,56 @@ class ArmPlanningPyNode(Node):
             self.get_logger().error(f"❌ Exception in _ensure_start_state_current(): {e}")
             import traceback
             self.get_logger().error(traceback.format_exc())
+        
+        # Set joint5 path constraint if lock_joint5 is enabled
+        if lock_joint5:
+            try:
+                js = getattr(self.arm, "joint_state", None)
+                if js is not None:
+                    joint_names = list(js.name)
+                    joint_positions = list(js.position)
+                    # Find joint5 index
+                    if "joint5" in joint_names:
+                        j5_idx = joint_names.index("joint5")
+                        j5_current = joint_positions[j5_idx]
+                        self.get_logger().info(
+                            f"🔒 Locking joint5 at current position: {j5_current:.4f} rad "
+                            f"(tolerance: ±{joint5_tolerance:.4f} rad)"
+                        )
+                        # Set path constraint for joint5
+                        self.arm.set_path_joint_constraint(
+                            joint_positions=[j5_current],
+                            joint_names=["joint5"],
+                            tolerance=joint5_tolerance,
+                            weight=1.0
+                        )
+                    else:
+                        self.get_logger().warn("⚠️ joint5 not found in joint_state, cannot lock")
+                else:
+                    self.get_logger().warn("⚠️ joint_state is None, cannot lock joint5")
+            except Exception as e:
+                self.get_logger().warn(f"⚠️ Failed to set joint5 constraint: {e}")
+        
         # Parameter validation
         if len(position) != 3:
+            self._clear_joint5_constraint_if_locked(lock_joint5)
             self.get_logger().error("position parameter must be a list containing 3 elements [x, y, z]")
             raise Exception("position parameter must be a list containing 3 elements [x, y, z]")
 
         if len(orientation) != 4:
+            self._clear_joint5_constraint_if_locked(lock_joint5)
             self.get_logger().error("orientation parameter must be a quaternion containing 4 elements [x, y, z, w]")
             raise Exception("orientation parameter must be a quaternion containing 4 elements [x, y, z, w]")
 
         check_result, details = self.check_within_workspace(position, verbose=True)
         # Check if position is within workspace
         if not check_result:
+            self._clear_joint5_constraint_if_locked(lock_joint5)
             self.get_logger().error(f"target position exceeds workspace, cannot execute：" + str(details))
             raise Exception("target position exceeds workspace, cannot execute")
 
         if not self.ik_feasible(position, orientation):
+            self._clear_joint5_constraint_if_locked(lock_joint5)
             raise RuntimeError("IK pre-check failed")
 
         plan = self.arm.plan(
@@ -923,9 +969,13 @@ class ArmPlanningPyNode(Node):
                     f"exception occurred during fallback compute_ik/ move_to_configuration process: {e}"
                 )
 
+            self._clear_joint5_constraint_if_locked(lock_joint5)
             raise RuntimeError("Path planning failed")
 
         self.get_logger().info("plansuccess，startexecute...")
+        # Clear constraint before execution (planning is done)
+        self._clear_joint5_constraint_if_locked(lock_joint5)
+        
         # execute
         self.arm.execute(plan)
         # waitingexecutecomplete

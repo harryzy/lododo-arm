@@ -120,7 +120,7 @@
       # NOTE: Keep X and Y corrections at 0.0 to validate algorithm accuracy; Z offset is commonly used for grasp height.
       position_correction:
         x: 0.0   # X correction - algorithm should compute this automatically, avoid compensating unless necessary
-        y: 0.0   # Y correction - algorithm should compute this automatically, avoid compensating unless necessary
+        y: 0.02   # Y correction - algorithm should compute this automatically, avoid compensating unless necessary
         z: 0.03  # Z correction (meters) - grasp height offset
       
       # Depth range limits

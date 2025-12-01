@@ -143,12 +143,21 @@ def generate_launch_description():
                 "moveit_manage_controllers": False,
                 # Publish SRDF semantic description to parameter server for RViz use
                 "publish_robot_description_semantic": True,
+                # ============ DISTRIBUTED SYSTEM CLOCK SYNC FIX ============
+                # Critical: Increase wait_for_current_state timeout for distributed systems
+                "trajectory_execution.wait_for_trajectory_completion": True,
+                # Disable trajectory start validation (workaround for clock sync issues)
+                "trajectory_execution.allowed_start_tolerance": 0.0,  # 0.0 = disable validation
+                # Alternative: if you want validation, increase these timeouts significantly
+                # "trajectory_execution.allowed_start_tolerance": 0.5,
+                # Increase state monitoring timeout for distributed systems
+                "current_state_monitor.joint_state_expected_update_rate": 50.0,  # Expected rate
+                "current_state_monitor.wait_for_current_state_timeout": 5.0,  # Increased from 1.0 to 5.0
+                # ============ END DISTRIBUTED FIX ============
                 # Increase trajectory execution timeout - greatly relaxed for real hardware
                 "trajectory_execution.allowed_execution_duration_scaling": 10.0,  # Increased from 3.0 to 10.0
                 "trajectory_execution.allowed_goal_duration_margin": 5.0,  # Increased from 1.0 to 5.0 seconds
-                "trajectory_execution.allowed_start_tolerance": 0.5,  # Relaxed start tolerance
                 "trajectory_execution.execution_duration_monitoring": True,
-                "trajectory_execution.wait_for_trajectory_completion": True,  # Wait for completion confirmation
                 # Increase step distance - directly reduce waypoint count
                 "trajectory_execution.allowed_step_interpolation": 0.3,  # Increase step interpolation
                 "trajectory.sample_duration": 0.1,  # Increase sampling interval to 0.1s to directly reduce waypoints

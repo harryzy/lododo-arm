@@ -51,21 +51,27 @@ def generate_launch_description():
                 "moveit_manage_controllers": True,
                 # Disable object recognition capabilities (Pickup/Place)
                 "move_group.disable_capabilities": "move_group/MoveGroupPickupAction move_group/MoveGroupPlaceAction",
-                # Trajectory execution config for distributed deployment (match moveit_controllers.yaml)
+                
+                # ============ DISTRIBUTED DEPLOYMENT CLOCK SYNC FIX ============
+                # CRITICAL: Set to 0.0 to completely disable trajectory start validation
+                # This bypasses the 1-second timestamp check that fails with clock drift
+                "trajectory_execution.allowed_start_tolerance": 0.0,
+                # Increase timeout for receiving current state (default is 1.0s which is too short)
+                "trajectory_execution.wait_for_trajectory_completion": True,
+                "trajectory_execution.execution_duration_monitoring": False,
+                # ============ END DISTRIBUTED FIX ============
+                
+                # Trajectory execution config for distributed deployment
                 "trajectory_execution.allowed_execution_duration_scaling": 15.0,
                 "trajectory_execution.allowed_goal_duration_margin": 10.0,
-                "trajectory_execution.allowed_start_tolerance": 0.2,  # Increased for timestamp tolerance
-                "trajectory_execution.execution_duration_monitoring": False,  # Bypass 1s timestamp check
-                # Critical fix for distributed deployment timestamp issues
-                # Disable validation to bypass 1s timestamp check (state already validated during planning)
                 "trajectory_execution.execution_velocity_scaling": 1.0,
                 "trajectory_execution.execution_acceleration_scaling": 1.0,
-                # Distributed deployment: relax timestamp validation (critical for network delay)
-                "trajectory_execution.wait_for_trajectory_completion": True,
+                
                 # Ensure listening to correct joint state topic
                 "planning_scene_monitor.joint_state_topic": "/joint_states",
                 # Relax current_state_monitor timestamp validation for distributed deployment
                 "planning_scene_monitor.wait_for_initial_state_timeout": 10.0,
+                
                 # Key 1: Explicitly set default planning pipeline
                 "planning_pipeline": "ompl",
                 # Key 2: Set adapters under correct namespace (double safety: set in both places)
